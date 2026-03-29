@@ -115,6 +115,11 @@ const DEFAULT_SUPPLY = [
   {id:"ghkcu",name:"GHK-Cu",cat:"peptide",color:"#8f8fcf",supplier:"Peptide vendor",supplierUrl:"",costPerOrder:50,unitsPerOrder:14,currentUnits:14,unitsPerDay:0.71,unitLabel:"doses",notes:"2mg SubQ Mon–Fri. 10mg vial ÷ 2mg/dose = 5 doses = ~7 days at 5x/week."},
   {id:"sabroxy",name:"Sabroxy",cat:"focus",color:"#cf6fcf",supplier:"Nootropics Depot",supplierUrl:"https://nootropicsdepot.com",costPerOrder:39.99,unitsPerOrder:180,currentUnits:180,unitsPerDay:0.36,unitLabel:"caps",notes:"200mg caps. 2–3x/week max on deep work days only."},
   {id:"dynamine",name:"Dynamine",cat:"focus",color:"#cf6fcf",supplier:"Various",supplierUrl:"",costPerOrder:30,unitsPerOrder:60,currentUnits:60,unitsPerDay:0.36,unitLabel:"caps",notes:"Per label. 2–3x/week max alongside Sabroxy."},
+  // ─── NEW ───
+  {id:"lcarnitine",name:"L-Carnitine",cat:"amino",color:"#cfb86f",supplier:"Various",supplierUrl:"",costPerOrder:20,unitsPerOrder:40,currentUnits:40,unitsPerDay:1,unitLabel:"servings",notes:"2–4g/serving fasted AM or pre-cardio. Builds in tissue over 2–3 weeks of daily use."},
+  {id:"pump-blend",name:"Pump Blend (Pre-Workout)",cat:"blend",color:"#cf6f8f",supplier:"Various / bulk",supplierUrl:"",costPerOrder:35,unitsPerOrder:30,currentUnits:30,unitsPerDay:1,unitLabel:"servings",notes:"L-Citrulline 6–10g + Agmatine 750mg + Betaine 2.5g + Glycerol 2g + salt. Mix custom or buy pre-made. Lift days only."},
+  {id:"5amino1mq",name:"5-Amino-1MQ",cat:"metabolic",color:"#6fcf6f",supplier:"Peptide vendor",supplierUrl:"",costPerOrder:50,unitsPerOrder:60,currentUnits:0,unitsPerDay:1,unitLabel:"caps",notes:"20–50mg caps 1–2x/day with food. Cycle 8 wks on / 4 wks off. NNMT inhibitor — metabolic + NAD+ activation."},
+  {id:"motsc",name:"MOTS-c",cat:"peptide",color:"#8f6fcf",supplier:"Peptide vendor",supplierUrl:"",costPerOrder:60,unitsPerOrder:3,currentUnits:0,unitsPerDay:0.43,unitLabel:"doses",notes:"5–10mg SubQ 2–3x/week fasted AM pre-exercise. 10mg vial ÷ 10mg/dose = 1 dose/vial, or split into 5mg doses = 2 doses. Store in fridge."},
 ];
 
 // ─── SUPPLEMENT STACKS (reference) ───
@@ -206,6 +211,43 @@ const REF_STACKS=[
     {name:"L-Glutamine",dose:"15–30g",freq:"AM empty stomach",source:"Various",price:"~$20",what:"Gut lining repair — intestinal barrier integrity"},
     {name:"Digestive Enzymes",dose:"Per label",freq:"With meals",source:"Various",price:"~$20",what:"Break down protein, fats, carbs more efficiently"},
     {name:"Pro-digestive foods",dose:"",freq:"Daily",source:"Grocery",price:"",what:"Pineapple, kefir, sauerkraut, kimchi, Greek yogurt, kombucha"},
+  ]},
+  {name:"PEPTIDES — Active Protocol",color:"#6fcfcf",items:[
+    {name:"BPC-157",dose:"500mcg",freq:"3–4x/day oral (reset phase)",source:"Peptide vendor",price:"~$40/vial",what:"Gut + systemic repair peptide. Heals tendons, gut lining, CNS. Reset phase only."},
+    {name:"GHK-Cu",dose:"2mg SubQ",freq:"Mon–Fri before bed",source:"Peptide vendor",price:"~$50/10mg vial",what:"Copper tripeptide — collagen, wound healing, anti-inflammatory, hair follicle activation."},
+    {name:"GH (Growth Hormone)",dose:"2 IU SubQ",freq:"Daily before bed",source:"Rx / compounding",price:"~$150/mo",what:"IGF-1 stimulation, fat oxidation, tissue repair, sleep quality. Must cycle 5 on / 2 off."},
+    {name:"Retatrutide",dose:"~1.33mg SubQ",freq:"Mon/Wed/Fri evening",source:"Peptide vendor",price:"~$80/10mg vial",what:"Triple agonist GLP-1/GIP/glucagon — appetite suppression, fat loss, metabolic health."},
+    {name:"Semax",dose:"300mcg per nostril",freq:"1–2x daily AM (no dosing after 3PM)",source:"Peptide vendor",price:"~$40/5mg vial",what:"ACTH analog — BDNF boost, focus, neuroprotection. 5mg vial + 2.5ml bac water ≈ 16 doses."},
+    {name:"Selank",dose:"250mcg per nostril",freq:"1–2x daily AM",source:"Peptide vendor",price:"~$40/5mg vial",what:"Anxiolytic peptide — reduces anxiety without sedation, memory, immune modulation."},
+    {name:"Pinealon",dose:"1mg oral",freq:"Daily AM fasted",source:"Peptide vendor",price:"~$45/30 doses",what:"Epigenetic peptide from pineal gland — circadian regulation, neuroprotection, sleep depth."},
+    {name:"MOTS-c",dose:"5–10mg SubQ",freq:"2–3x/week AM (fasted + pre-exercise)",source:"Peptide vendor",price:"~$60/10mg vial",what:"Mitochondrial-derived peptide — AMPK activation, insulin sensitivity, fat oxidation. Stack with exercise."},
+  ]},
+  {name:"L-CARNITINE — Fat Oxidation",color:"#cfb86f",items:[
+    {name:"L-Carnitine (base)",dose:"2–4g",freq:"AM fasted or pre-cardio",source:"Various (powder/liquid)",price:"~$15–25",what:"Shuttles fatty acids into mitochondria for energy. Best taken fasted or before cardio."},
+    {name:"L-Carnitine L-Tartrate (LCLT)",dose:"2g",freq:"Pre-workout",source:"Various",price:"~$20",what:"Most bioavailable form — androgen receptor upregulation, recovery, reduces DOMS."},
+    {name:"Acetyl-L-Carnitine (ALCAR)",dose:"500mg–2g",freq:"AM or pre-workout",source:"Various",price:"~$15",what:"Crosses BBB — cognitive + fat oxidation combo. Use when you want brain + body benefit."},
+    {name:"⚠ Protocol note",dose:"",freq:"",source:"",price:"",what:"Stack carnitine with insulin spike (banana + honey pre-lift) for max muscle uptake. Daily use builds tissue levels over 2–3 weeks."},
+  ]},
+  {name:"PUMP BLEND — Pre-Workout Vasodilation",color:"#cf6f8f",items:[
+    {name:"L-Citrulline",dose:"6–10g",freq:"30–45 min pre-lift",source:"Bulk powder",price:"~$20/200g",what:"Converts to arginine → NO production → vasodilation. Better than arginine direct."},
+    {name:"Agmatine Sulfate",dose:"500–1500mg",freq:"Pre-workout",source:"Bulk powder / Swolverine",price:"~$20",what:"NO synthase modulator, NMDA antagonist. Pump + pain tolerance + mood."},
+    {name:"Betaine Anhydrous",dose:"2.5g",freq:"Pre-workout",source:"Bulk powder",price:"~$12",what:"Osmolyte — draws water into muscle cells. Power output + cellular hydration."},
+    {name:"Glycerol Monostearate",dose:"2–3g",freq:"Pre-workout",source:"Bulk powder",price:"~$15",what:"Hyperhydration — pulls water into muscle. Stack with high water intake (16–24oz)."},
+    {name:"Himalayan Pink Salt",dose:"1g (¼ tsp)",freq:"Pre-workout with water",source:"Grocery",price:"<$5",what:"Electrolyte prime — sodium primes pumps and maintains intra-workout hydration."},
+    {name:"⚠ Protocol note",dose:"",freq:"",source:"",price:"",what:"Take 30–45 min before lift with 20–24oz water. Do NOT stack with caffeine-heavy stims if sensitive to BP spikes."},
+  ]},
+  {name:"5-AMINO-1MQ — Metabolic",color:"#6fcf6f",items:[
+    {name:"5-Amino-1MQ",dose:"20–50mg",freq:"1–2x/day with food",source:"Peptide vendor / nootropic source",price:"~$50/60ct",what:"NNMT inhibitor — activates dormant fat cells, increases NAD+, boosts mitochondrial biogenesis. Strong metabolic compound."},
+    {name:"⚠ Cycle note",dose:"",freq:"",source:"",price:"",what:"Cycle 8 weeks ON / 4 weeks OFF. Monitor energy and metabolism. Best stacked with MOTS-c and Retatrutide for max fat loss synergy."},
+    {name:"Stack with: Retatrutide",dose:"Per protocol",freq:"Mon/Wed/Fri",source:"",price:"",what:"Triple agonist GLP-1 — complements 5-Amino-1MQ's fat mobilization."},
+    {name:"Stack with: MOTS-c",dose:"5–10mg SubQ",freq:"2–3x/week fasted",source:"",price:"",what:"AMPK activation synergizes with NNMT inhibition for metabolic reset."},
+    {name:"Stack with: L-Carnitine",dose:"2–4g",freq:"AM fasted",source:"",price:"",what:"Shuttles mobilized fatty acids into mitochondria — completes the fat oxidation pathway."},
+  ]},
+  {name:"MOTS-c — Mitochondrial & Metabolic",color:"#8f6fcf",items:[
+    {name:"MOTS-c",dose:"5–10mg SubQ",freq:"2–3x/week AM, fasted + pre-exercise",source:"Peptide vendor",price:"~$60/10mg vial",what:"Mitochondrial ORF peptide — AMPK activation, insulin sensitization, fat oxidation, anti-aging."},
+    {name:"⚠ Timing note",dose:"",freq:"",source:"",price:"",what:"Inject 30–60 min before fasted cardio or ruck for maximum AMPK-driven fat oxidation. Do not take before heavy carb meals."},
+    {name:"Stack synergy",dose:"",freq:"",source:"",price:"",what:"MOTS-c + 5-Amino-1MQ + Retatrutide = metabolic triple stack. All three target different fat oxidation pathways simultaneously."},
+    {name:"Reconstitution",dose:"",freq:"",source:"",price:"",what:"10mg vial + 1ml bac water = 10mg/ml. Draw 0.5–1 unit on insulin syringe for 5–10mg dose. Store in fridge, use within 30 days."},
   ]},
 ];
 

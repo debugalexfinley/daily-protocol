@@ -215,6 +215,8 @@ interface DailyLog { weight?:number;feeling?:number;liftDone?:boolean;ruckDone?:
 interface CycleRecord { id:string;substance:string;startDate:string;endDate?:string;phase:"on"|"off"; }
 interface MaintRecord { id:string;substance:string;startDate:string;endDate?:string; }
 interface SupplyItem { id:string;name:string;cat:string;color:string;supplier:string;supplierUrl:string;costPerOrder:number;unitsPerOrder:number;currentUnits:number;unitsPerDay:number;unitLabel:string;notes:string; }
+interface StackItem { name:string;dose:string;freq:string;source:string;price:string;what:string; }
+interface UserStack { id:string;name:string;color:string;notes:string;items:StackItem[];mode:"inactive"|"daily"|"once";activeSince?:string;activeDate?:string;fromRef?:string; }
 
 // ─── UTILS ───
 function todayStr(){return new Date().toISOString().split("T")[0];}
@@ -761,30 +763,256 @@ function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setC
   );
 }
 
-// ─── STACK CARD ───
-function StackCard({stack,isOpen,onToggle}:{stack:{name:string;color:string;items:{name:string;dose:string;freq:string;source:string;price:string;what:string}[]};isOpen:boolean;onToggle:()=>void}){
+// ─── STACKS PAGE ───
+const BLANK_ITEM:StackItem={name:"",dose:"",freq:"",source:"",price:"",what:""};
+const STACK_COLORS=["#6f8fcf","#6fcfcf","#cf6fcf","#cfcf6f","#6fcf6f","#cf6f6f","#cfb86f","#8f8fcf","#cf8f6f","#8fcf6f"];
+
+function StacksPage({stacks,setStacks}:{stacks:UserStack[];setStacks:(v:UserStack[]|((p:UserStack[])=>UserStack[]))=>void}){
+  const[view,setView]=useState<"active"|"all"|"ref">("active");
+  const[expanded,setExpanded]=useState<string|null>(null);
+  const[editing,setEditing]=useState<string|null>(null);
+  const[editBuf,setEditBuf]=useState<Partial<UserStack>>({});
+  const[showImport,setShowImport]=useState(false);
+  const today=todayStr();
+
+  // import from reference
+  const importRef=(ref:{name:string;color:string;items:{name:string;dose:string;freq:string;source:string;price:string;what:string}[]})=>{
+    const exists=stacks.find(s=>s.fromRef===ref.name||s.name===ref.name);
+    if(exists){alert("Already imported.");return;}
+    const ns:UserStack={id:`stack_${Date.now()}`,name:ref.name,color:ref.color,notes:"",items:ref.items.map(i=>({...i})),mode:"inactive",fromRef:ref.name};
+    setStacks(prev=>[ns,...prev]);
+    setShowImport(false);
+    setExpanded(ns.id);
+  };
+
+  const newStack=()=>{
+    const ns:UserStack={id:`stack_${Date.now()}`,name:"New Stack",color:STACK_COLORS[stacks.length%STACK_COLORS.length],notes:"",items:[{...BLANK_ITEM}],mode:"inactive"};
+    setStacks(prev=>[ns,...prev]);
+    setEditing(ns.id);
+    setEditBuf({...ns});
+  };
+
+  const saveEdit=()=>{
+    if(!editing)return;
+    setStacks(prev=>prev.map(s=>s.id===editing?{...s,...editBuf} as UserStack:s));
+    setEditing(null);setEditBuf({});
+  };
+
+  const deleteStack=(id:string)=>{
+    if(!confirm("Delete this stack?"))return;
+    setStacks(prev=>prev.filter(s=>s.id!==id));
+    if(expanded===id)setExpanded(null);
+  };
+
+  const setMode=(id:string,mode:"inactive"|"daily"|"once")=>{
+    setStacks(prev=>prev.map(s=>{
+      if(s.id!==id)return s;
+      const updates:Partial<UserStack>={mode};
+      if(mode==="daily"&&!s.activeSince)updates.activeSince=today;
+      if(mode==="once")updates.activeDate=today;
+      if(mode==="inactive"){updates.activeSince=undefined;updates.activeDate=undefined;}
+      return{...s,...updates};
+    }));
+  };
+
+  const activeStacks=stacks.filter(s=>s.mode==="daily"||s.mode==="once");
+  const display=view==="active"?activeStacks:view==="all"?stacks:[];
+
+  const modeColor=(m:"inactive"|"daily"|"once")=>m==="daily"?"#6fcf6f":m==="once"?"#cfb86f":"#333";
+  const modeLabel=(m:"inactive"|"daily"|"once")=>m==="daily"?"● DAILY ROTATION":m==="once"?"◉ ONE-TIME TODAY":"○ INACTIVE";
+
   return(
-    <div style={{marginBottom:8}}>
-      <button onClick={onToggle} style={{width:"100%",textAlign:"left",padding:14,background:"#111",border:`1px solid ${isOpen?"#333":"#1a1a1a"}`,borderRadius:isOpen?"8px 8px 0 0":8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{fontSize:12,fontWeight:700,color:stack.color,letterSpacing:"0.05em"}}>{stack.name}</div>
-          <div style={{fontSize:10,color:"#555",marginTop:2}}>{stack.items.length} compounds</div>
+    <div style={{padding:"0 0 60px"}}>
+      {/* header */}
+      <div style={{background:"#111",borderBottom:"1px solid #1a1a1a",padding:"14px 14px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>STACKS</div>
+            <div style={{fontSize:10,color:"#555",marginTop:2}}>{activeStacks.length} active · {stacks.length} total</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>setShowImport(v=>!v)} style={{padding:"7px 12px",background:"#1a1a2f",border:"1px solid #3a3a6f",borderRadius:6,color:"#6f8fcf",fontSize:11,fontWeight:700,cursor:"pointer"}}>↓ Import</button>
+            <button onClick={newStack} style={{padding:"7px 12px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:6,color:"#6fcf6f",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ New</button>
+          </div>
         </div>
-        <span style={{color:"#555",fontSize:16,display:"inline-block",transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▾</span>
-      </button>
-      {isOpen&&(
-        <div style={{background:"#0d0d0d",border:"1px solid #333",borderTop:"none",borderRadius:"0 0 8px 8px",padding:12}}>
-          {stack.items.map((item,ii)=>(
-            <div key={ii} style={{padding:"10px 0",borderBottom:ii<stack.items.length-1?"1px solid #1a1a1a":"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                <span style={{fontSize:13,fontWeight:700,color:"#e0e0e0"}}>{item.name}</span>
-                <span style={{fontSize:10,color:"#666",textAlign:"right"}}>{item.price}</span>
-              </div>
-              {(item.dose||item.freq)&&<div style={{display:"flex",gap:12,marginBottom:4}}>{item.dose&&<span style={{fontSize:11,color:stack.color}}>{item.dose}</span>}{item.freq&&item.freq!=="Stack"&&<span style={{fontSize:11,color:"#888"}}>{item.freq}</span>}</div>}
-              {item.what&&<div style={{fontSize:11,color:"#666",lineHeight:1.4}}>{item.what}</div>}
-              {item.source&&item.source!==""&&<div style={{fontSize:10,color:"#444",marginTop:3}}>Source: {item.source}</div>}
+
+        {/* import panel */}
+        {showImport&&(
+          <div style={{background:"#0d0d0d",border:"1px solid #222",borderRadius:8,padding:12,marginBottom:12}}>
+            <div style={{fontSize:10,color:"#555",letterSpacing:"0.1em",marginBottom:8}}>IMPORT FROM REFERENCE LIBRARY</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {REF_STACKS.filter(r=>!stacks.find(s=>s.fromRef===r.name||s.name===r.name)).map((r,i)=>(
+                <button key={i} onClick={()=>importRef(r)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:"#111",border:"1px solid #1f1f1f",borderRadius:6,cursor:"pointer",textAlign:"left"}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:r.color}}>{r.name}</div>
+                    <div style={{fontSize:9,color:"#555",marginTop:1}}>{r.items.length} compounds</div>
+                  </div>
+                  <span style={{color:"#6f8fcf",fontSize:12}}>↓</span>
+                </button>
+              ))}
+              {REF_STACKS.every(r=>stacks.find(s=>s.fromRef===r.name||s.name===r.name))&&<div style={{fontSize:11,color:"#444",fontStyle:"italic",padding:"6px 0"}}>All reference stacks imported.</div>}
             </div>
+          </div>
+        )}
+
+        {/* sub-tabs */}
+        <div style={{display:"flex"}}>
+          {[{id:"active",label:"ACTIVE",sub:`${activeStacks.length}`},{id:"all",label:"ALL STACKS",sub:`${stacks.length}`},{id:"ref",label:"REFERENCE",sub:`${REF_STACKS.length}`}].map(t=>(
+            <button key={t.id} onClick={()=>setView(t.id as "active"|"all"|"ref")} style={{flex:1,padding:"10px 0",background:"none",border:"none",borderBottom:view===t.id?"2px solid #fff":"2px solid transparent",color:view===t.id?"#fff":"#555",cursor:"pointer"}}>
+              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.06em"}}>{t.label}</div>
+              <div style={{fontSize:9,color:view===t.id?"#888":"#333",marginTop:1}}>{t.sub}</div>
+            </button>
           ))}
+        </div>
+      </div>
+
+      {/* ─── REFERENCE view ─── */}
+      {view==="ref"&&(
+        <div style={{padding:"12px 12px 0"}}>
+          <div style={{fontSize:10,color:"#555",lineHeight:1.6,marginBottom:10}}>Reference library — tap ↓ to import into your stacks and activate.</div>
+          {REF_STACKS.map((stack,i)=>{
+            const imported=!!stacks.find(s=>s.fromRef===stack.name||s.name===stack.name);
+            const isExp=expanded===`ref_${i}`;
+            return(
+              <div key={i} style={{marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"stretch",gap:0}}>
+                  <button onClick={()=>setExpanded(isExp?null:`ref_${i}`)} style={{flex:1,textAlign:"left",padding:14,background:"#111",border:`1px solid ${isExp?"#333":"#1a1a1a"}`,borderRadius:isExp?"8px 0 0 0":"8px 0 0 8px",cursor:"pointer"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:stack.color,letterSpacing:"0.05em"}}>{stack.name}</div>
+                    <div style={{fontSize:9,color:"#555",marginTop:2}}>{stack.items.length} compounds{imported?" · imported":""}</div>
+                  </button>
+                  <button onClick={()=>imported?undefined:importRef(stack)} style={{padding:"0 14px",background:imported?"#111":"#1a1a2f",border:`1px solid ${isExp?"#333":"#1a1a1a"}`,borderLeft:"1px solid #1a1a1a",borderRadius:isExp?"0 8px 0 0":"0 8px 8px 0",cursor:imported?"default":"pointer",color:imported?"#333":"#6f8fcf",fontSize:12,fontWeight:700}}>
+                    {imported?"✓":"↓"}
+                  </button>
+                </div>
+                {isExp&&(
+                  <div style={{background:"#0d0d0d",border:"1px solid #333",borderTop:"none",borderRadius:"0 0 8px 8px",padding:12}}>
+                    {stack.items.map((item,ii)=>(
+                      <div key={ii} style={{padding:"9px 0",borderBottom:ii<stack.items.length-1?"1px solid #141414":"none"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#e0e0e0"}}>{item.name}</span>
+                          <span style={{fontSize:9,color:"#666"}}>{item.price}</span>
+                        </div>
+                        {(item.dose||item.freq)&&<div style={{display:"flex",gap:10,marginBottom:2}}>{item.dose&&<span style={{fontSize:10,color:stack.color}}>{item.dose}</span>}{item.freq&&item.freq!=="Stack"&&<span style={{fontSize:10,color:"#888"}}>{item.freq}</span>}</div>}
+                        {item.what&&<div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{item.what}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ─── ACTIVE / ALL view ─── */}
+      {view!=="ref"&&(
+        <div style={{padding:"12px 12px 0"}}>
+          {display.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:"#333",fontSize:12,fontStyle:"italic"}}>{view==="active"?"No active stacks. Import or activate one below.":"No stacks yet. Import from reference or create new."}</div>}
+          {display.map(stack=>{
+            const isExp=expanded===stack.id;
+            const isEdit=editing===stack.id;
+            const buf=isEdit?editBuf:stack;
+            return(
+              <div key={stack.id} style={{marginBottom:8,background:"#111",border:`1px solid ${stack.mode!=="inactive"?"#2a2a1a":"#1a1a1a"}`,borderRadius:8,overflow:"hidden"}}>
+                {/* Header */}
+                <div style={{padding:"12px 14px"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:stack.color,flexShrink:0}}/>
+                        <span style={{fontSize:13,fontWeight:700,color:"#e0e0e0"}}>{stack.name}</span>
+                        {stack.fromRef&&<span style={{fontSize:8,color:"#444",border:"1px solid #2a2a2a",padding:"1px 5px",borderRadius:2}}>REF</span>}
+                      </div>
+                      <div style={{fontSize:9,color:modeColor(stack.mode),marginLeft:16,letterSpacing:"0.08em",fontWeight:600}}>{modeLabel(stack.mode)}</div>
+                    </div>
+                    <div style={{display:"flex",gap:4}}>
+                      <button onClick={()=>{setEditing(stack.id);setEditBuf({...stack});setExpanded(null);}} style={{padding:"5px 8px",background:"#1a1a1a",border:"1px solid #222",borderRadius:5,color:"#555",fontSize:11,cursor:"pointer"}}>✎</button>
+                      <button onClick={()=>deleteStack(stack.id)} style={{padding:"5px 8px",background:"#1a1a1a",border:"1px solid #222",borderRadius:5,color:"#444",fontSize:11,cursor:"pointer"}}>×</button>
+                    </div>
+                  </div>
+
+                  {/* Mode buttons */}
+                  {!isEdit&&(
+                    <div style={{display:"flex",gap:5,marginBottom:8}}>
+                      <button onClick={()=>setMode(stack.id,"daily")} style={{flex:1,padding:"7px 4px",background:stack.mode==="daily"?"#1a2f1a":"#111",border:`1px solid ${stack.mode==="daily"?"#2d5a2d":"#222"}`,borderRadius:5,color:stack.mode==="daily"?"#6fcf6f":"#555",fontSize:9,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>● DAILY</button>
+                      <button onClick={()=>setMode(stack.id,"once")} style={{flex:1,padding:"7px 4px",background:stack.mode==="once"?"#2f2a1a":"#111",border:`1px solid ${stack.mode==="once"?"#5a4d2d":"#222"}`,borderRadius:5,color:stack.mode==="once"?"#cfb86f":"#555",fontSize:9,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>◉ TODAY</button>
+                      <button onClick={()=>setMode(stack.id,"inactive")} style={{flex:1,padding:"7px 4px",background:stack.mode==="inactive"?"#1a1a1a":"#111",border:`1px solid ${stack.mode==="inactive"?"#333":"#222"}`,borderRadius:5,color:stack.mode==="inactive"?"#888":"#444",fontSize:9,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>○ OFF</button>
+                      <button onClick={()=>setExpanded(isExp?null:stack.id)} style={{padding:"7px 10px",background:"#0d0d0d",border:"1px solid #222",borderRadius:5,color:"#555",fontSize:12,cursor:"pointer"}}>{isExp?"▲":"▼"}</button>
+                    </div>
+                  )}
+
+                  {stack.notes&&!isEdit&&<div style={{fontSize:11,color:"#888",lineHeight:1.5,background:"#0d0d0d",borderRadius:4,padding:"6px 10px",marginBottom:4}}>{stack.notes}</div>}
+                  {stack.mode==="daily"&&stack.activeSince&&!isEdit&&<div style={{fontSize:9,color:"#555",marginTop:4}}>Active since {formatDate(stack.activeSince)}</div>}
+                </div>
+
+                {/* Expanded items */}
+                {isExp&&!isEdit&&(
+                  <div style={{borderTop:"1px solid #1a1a1a",padding:"12px 14px"}}>
+                    {stack.items.map((item,ii)=>(
+                      <div key={ii} style={{padding:"8px 0",borderBottom:ii<stack.items.length-1?"1px solid #141414":"none"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#e0e0e0"}}>{item.name}</span>
+                          {item.price&&<span style={{fontSize:9,color:"#555"}}>{item.price}</span>}
+                        </div>
+                        {(item.dose||item.freq)&&<div style={{display:"flex",gap:10,marginBottom:2}}>{item.dose&&<span style={{fontSize:10,color:stack.color}}>{item.dose}</span>}{item.freq&&item.freq!=="Stack"&&<span style={{fontSize:10,color:"#888"}}>{item.freq}</span>}</div>}
+                        {item.what&&<div style={{fontSize:10,color:"#555",lineHeight:1.4}}>{item.what}</div>}
+                        {item.source&&<div style={{fontSize:9,color:"#3a3a3a",marginTop:1}}>Source: {item.source}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Edit form */}
+                {isEdit&&(
+                  <div style={{borderTop:"1px solid #1f1f1f",padding:14,background:"#0d0d0d"}}>
+                    {/* Name + color */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>STACK NAME</div>
+                      <input value={buf.name||""} onChange={e=>setEditBuf(p=>({...p,name:e.target.value}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#fff",fontSize:14,fontWeight:700,outline:"none"}}/>
+                    </div>
+                    {/* Color picker */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>COLOR</div>
+                      <div style={{display:"flex",gap:6}}>
+                        {STACK_COLORS.map(c=>(
+                          <div key={c} onClick={()=>setEditBuf(p=>({...p,color:c}))} style={{width:24,height:24,borderRadius:"50%",background:c,cursor:"pointer",border:(buf.color||stack.color)===c?"2px solid #fff":"2px solid transparent",opacity:(buf.color||stack.color)===c?1:0.5}}/>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>NOTES / WHEN TO USE</div>
+                      <textarea value={buf.notes||""} onChange={e=>setEditBuf(p=>({...p,notes:e.target.value}))} placeholder="e.g. Deep work mornings only, 2x/week max..." style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#b0b0b0",fontSize:12,outline:"none",resize:"none",minHeight:52,fontFamily:"inherit"}}/>
+                    </div>
+                    {/* Items */}
+                    <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:6}}>COMPOUNDS ({(buf.items||[]).length})</div>
+                    {(buf.items||[]).map((item,ii)=>(
+                      <div key={ii} style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:6,padding:10,marginBottom:6}}>
+                        <div style={{display:"flex",gap:6,marginBottom:6}}>
+                          <input value={item.name} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,name:e.target.value}:it)||[]}))} placeholder="Name" style={{flex:2,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#fff",fontSize:12,outline:"none"}}/>
+                          <input value={item.dose} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,dose:e.target.value}:it)||[]}))} placeholder="Dose" style={{flex:1,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#cfb86f",fontSize:12,outline:"none"}}/>
+                        </div>
+                        <div style={{display:"flex",gap:6,marginBottom:6}}>
+                          <input value={item.freq} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,freq:e.target.value}:it)||[]}))} placeholder="Frequency" style={{flex:1,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#888",fontSize:12,outline:"none"}}/>
+                          <input value={item.source} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,source:e.target.value}:it)||[]}))} placeholder="Source" style={{flex:1,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#888",fontSize:12,outline:"none"}}/>
+                          <input value={item.price} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,price:e.target.value}:it)||[]}))} placeholder="$" style={{width:56,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#888",fontSize:12,outline:"none"}}/>
+                        </div>
+                        <div style={{display:"flex",gap:6}}>
+                          <input value={item.what} onChange={e=>setEditBuf(p=>({...p,items:p.items?.map((it,idx)=>idx===ii?{...it,what:e.target.value}:it)||[]}))} placeholder="What it does..." style={{flex:1,background:"#0d0d0d",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#555",fontSize:12,outline:"none"}}/>
+                          <button onClick={()=>setEditBuf(p=>({...p,items:p.items?.filter((_,idx)=>idx!==ii)||[]}))} style={{padding:"6px 10px",background:"#1a1010",border:"1px solid #3a1a1a",borderRadius:4,color:"#cf6f6f",fontSize:12,cursor:"pointer"}}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={()=>setEditBuf(p=>({...p,items:[...(p.items||[]),{...BLANK_ITEM}]}))} style={{width:"100%",padding:"8px",background:"#0d0d0d",border:"1px dashed #222",borderRadius:6,color:"#555",fontSize:11,cursor:"pointer",marginBottom:10}}>+ Add compound</button>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={saveEdit} style={{flex:2,padding:"10px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:6,color:"#6fcf6f",fontSize:12,fontWeight:700,cursor:"pointer"}}>✓ Save</button>
+                      <button onClick={()=>{setEditing(null);setEditBuf({});}} style={{flex:1,padding:"10px",background:"#1a1a1a",border:"1px solid #222",borderRadius:6,color:"#666",fontSize:12,cursor:"pointer"}}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -796,13 +1024,13 @@ export default function DailyProtocol(){
   const[page,setPage]=useState("schedule");
   const[phase,setPhase]=useState("reset");
   const[dayType,setDayType]=useState("lift");
-  const[openStack,setOpenStack]=useState<number|null>(null);
 
   const[allChecks,setAllChecks]=useLS<Record<string,Record<string,boolean>>>("dp_checks",{});
   const[logs,setLogs]=useLS<Record<string,DailyLog>>("dp_logs",{});
   const[cycles,setCycles]=useLS<CycleRecord[]>("dp_cycles",[]);
   const[maint,setMaint]=useLS<MaintRecord[]>("dp_maint",[]);
   const[supply,setSupply]=useLS<SupplyItem[]>("dp_supply",DEFAULT_SUPPLY);
+  const[stacks,setStacks]=useLS<UserStack[]>("dp_stacks",[]);
 
   const today=todayStr();
   const checkKey=`${today}_${phase}_${dayType}`;
@@ -881,6 +1109,40 @@ export default function DailyProtocol(){
               </div>
             </div>
           </div>
+          {/* Active stacks banner */}
+          {(()=>{
+            const activeToday=stacks.filter(s=>s.mode==="daily"||(s.mode==="once"&&s.activeDate===today));
+            if(!activeToday.length)return null;
+            return(
+              <div style={{margin:"12px 16px 0",background:"#141a14",border:"1px solid #2a3a2a",borderRadius:8,padding:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:9,color:"#6fcf6f",letterSpacing:"0.12em",fontWeight:700}}>ACTIVE STACKS TODAY</div>
+                  <button onClick={()=>setPage("supps")} style={{background:"none",border:"none",color:"#555",fontSize:10,cursor:"pointer",padding:0}}>manage →</button>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {activeToday.map(s=>(
+                    <div key={s.id} style={{background:"#0d0d0d",border:`1px solid ${s.color}30`,borderRadius:6,padding:"8px 10px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.items.length?4:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{width:6,height:6,borderRadius:"50%",background:s.color}}/>
+                          <span style={{fontSize:12,fontWeight:700,color:"#e0e0e0"}}>{s.name}</span>
+                        </div>
+                        <span style={{fontSize:8,color:s.mode==="daily"?"#6fcf6f":"#cfb86f",fontWeight:700,letterSpacing:"0.1em"}}>{s.mode==="daily"?"DAILY":"TODAY"}</span>
+                      </div>
+                      {s.items.length>0&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:"2px 8px",marginLeft:12}}>
+                          {s.items.filter(i=>i.name).map((it,ii)=>(
+                            <span key={ii} style={{fontSize:10,color:"#888"}}>{it.name}{it.dose?` ${it.dose}`:""}</span>
+                          ))}
+                        </div>
+                      )}
+                      {s.notes&&<div style={{fontSize:10,color:"#555",marginTop:4,marginLeft:12,fontStyle:"italic"}}>{s.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {/* Schedule blocks */}
           <div style={{padding:"20px 16px"}}>
             {schedule.map((b,i)=><ScheduleBlock key={`${phase}-${dayType}-${i}`} block={b} checks={todayChecks} onToggle={toggleCheck}/>)}
@@ -926,17 +1188,7 @@ export default function DailyProtocol(){
       {page==="track"&&<TrackPage logs={logs} setLogs={setLogs}/>}
       {page==="cycles"&&<CyclesPage cycles={cycles} setCycles={setCycles} maint={maint} setMaint={setMaint}/>}
       {page==="supply"&&<SupplyPage supply={supply} setSupply={setSupply}/>}
-      {page==="supps"&&(
-        <div style={{padding:"16px"}}>
-          <div style={{fontSize:9,color:"#555",letterSpacing:"0.15em",marginBottom:4}}>REFERENCE</div>
-          <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:20}}>SUPPLEMENT STACKS</div>
-          {REF_STACKS.map((stack,i)=><StackCard key={i} stack={stack} isOpen={openStack===i} onToggle={()=>setOpenStack(openStack===i?null:i)}/>)}
-          <div style={{marginTop:20,padding:14,background:"#111",border:"1px solid #1f1f1f",borderRadius:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#888",marginBottom:6,letterSpacing:"0.05em"}}>NOTES</div>
-            <div style={{fontSize:11,color:"#555",lineHeight:1.7}}>Reference only. Not all stacks run simultaneously. Cross-reference Schedule tab for active protocol. Many compounds appear in multiple stacks — only dose once. Consult your doctor before adding or changing anything.</div>
-          </div>
-        </div>
-      )}
+      {page==="supps"&&<StacksPage stacks={stacks} setStacks={setStacks}/>}
     </div>
   );
 }

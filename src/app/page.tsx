@@ -794,12 +794,12 @@ function SupplyTab(){
 
   const startEdit=(item:SupplyRow)=>{
     setEditing((item as {compoundId:string}).compoundId);
-    setEditBuf({compoundId:(item as {compoundId:string}).compoundId,name:item.name,category:item.category,color:item.color,currentStock:item.currentStock,stockUnit:item.stockUnit,weeklyUsage:item.weeklyUsage,vendors:(item.vendors as Vendor[]),notes:item.notes});
+    setEditBuf({compoundId:(item as {compoundId:string}).compoundId,name:item.name,category:item.category,color:item.color,currentStock:item.currentStock,stockUnit:item.stockUnit,mgPerUnit:(item as {mgPerUnit?:number}).mgPerUnit,weeklyUsage:item.weeklyUsage,vendors:(item.vendors as Vendor[]),notes:item.notes});
   };
 
   const saveEdit=()=>{
     if(!editing||!editBuf.compoundId)return;
-    upsertItem({compoundId:editBuf.compoundId,name:editBuf.name??"",category:editBuf.category??"",color:editBuf.color??"#888",currentStock:editBuf.currentStock??0,stockUnit:editBuf.stockUnit??"doses",weeklyUsage:editBuf.weeklyUsage??0,vendors:editBuf.vendors??[],notes:editBuf.notes??""});
+    upsertItem({compoundId:editBuf.compoundId,name:editBuf.name??"",category:editBuf.category??"",color:editBuf.color??"#888",currentStock:editBuf.currentStock??0,stockUnit:editBuf.stockUnit??"doses",mgPerUnit:editBuf.mgPerUnit,weeklyUsage:editBuf.weeklyUsage??0,vendors:editBuf.vendors??[],notes:editBuf.notes??""});
     setEditing(null);setEditBuf({});
   };
 
@@ -850,7 +850,7 @@ function SupplyTab(){
                       <div style={{width:8,height:8,borderRadius:"50%",background:item.color,flexShrink:0}}/>
                       <span style={{fontSize:13,fontWeight:700,color:"#e0e0e0"}}>{item.name}</span>
                     </div>
-                    <div style={{fontSize:10,color:"#555",marginLeft:16}}>{item.category} · {item.currentStock} {item.stockUnit}</div>
+                    <div style={{fontSize:10,color:"#555",marginLeft:16}}>{item.category} · {item.currentStock} {item.stockUnit}{(item as {mgPerUnit?:number}).mgPerUnit?` · ${(item as {mgPerUnit?:number}).mgPerUnit}mg ea`:""}</div>
                   </div>
                   <div style={{textAlign:"right",flexShrink:0}}>
                     <div style={{fontSize:12,fontWeight:800,fontFamily:"monospace",color:"#cfb86f"}}>{fmtCost(d.cpMonth)}<span style={{fontSize:9,color:"#555",fontWeight:400}}>/mo</span></div>
@@ -903,12 +903,30 @@ function SupplyTab(){
                       </div>
                       <div style={{flex:1}}>
                         <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>UNIT</div>
-                        <input value={editBuf.stockUnit??""} onChange={e=>setEditBuf(p=>({...p,stockUnit:e.target.value}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#e0e0e0",fontSize:13,outline:"none"}}/>
+                        <select value={editBuf.stockUnit??""} onChange={e=>setEditBuf(p=>({...p,stockUnit:e.target.value}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#e0e0e0",fontSize:13,outline:"none",appearance:"auto"}}>
+                          <option value="caps">caps</option>
+                          <option value="tabs">tabs</option>
+                          <option value="doses">doses</option>
+                          <option value="servings">servings</option>
+                          <option value="mg">mg</option>
+                          <option value="mL">mL</option>
+                          <option value="IU">IU</option>
+                          <option value="g">g</option>
+                          <option value="packets">packets</option>
+                          <option value="pouches">pouches</option>
+                          <option value="days">days</option>
+                        </select>
                       </div>
                     </div>
-                    <div>
-                      <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>WEEKLY USAGE</div>
-                      <input type="number" step="0.5" value={editBuf.weeklyUsage??""} onChange={e=>setEditBuf(p=>({...p,weeklyUsage:parseFloat(e.target.value)||0}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#e0e0e0",fontSize:13,outline:"none"}}/>
+                    <div style={{display:"flex",gap:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>MG PER UNIT</div>
+                        <input type="number" step="0.01" value={editBuf.mgPerUnit??""} onChange={e=>setEditBuf(p=>({...p,mgPerUnit:parseFloat(e.target.value)||undefined}))} placeholder="e.g. 500" style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#cfb86f",fontSize:13,outline:"none"}}/>
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>WEEKLY USAGE</div>
+                        <input type="number" step="0.5" value={editBuf.weeklyUsage??""} onChange={e=>setEditBuf(p=>({...p,weeklyUsage:parseFloat(e.target.value)||0}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#e0e0e0",fontSize:13,outline:"none"}}/>
+                      </div>
                     </div>
                     {/* Vendor editing */}
                     <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>VENDORS</div>

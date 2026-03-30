@@ -586,7 +586,9 @@ function LogTab(){
     upsertDailyLog({date,...current} as Parameters<typeof upsertDailyLog>[0]);
   };
 
+  const[logFilter,setLogFilter]=useState<string>("all");
   const blocks:Block[]=(dailyLog?.dailyRun as Block[])??[];
+  const filteredLogBlocks=logFilter==="all"?blocks:blocks.filter(b=>b.type===logFilter);
   const totalItems=blocks.reduce((a,b)=>a+b.items.length,0);
   const doneItems=blocks.reduce((a,b)=>a+b.items.filter(item=>checks[`${b.label}__${item}`]).length,0);
   const pctDone=totalItems?Math.round((doneItems/totalItems)*100):0;
@@ -635,8 +637,17 @@ function LogTab(){
         </div>
       )}
 
+      {/* Type filter */}
+      {blocks.length>0&&(
+        <div style={{display:"flex",gap:0,borderBottom:"1px solid #222",marginBottom:16}}>
+          {["all","supplement","meal","training","focus"].map(f=>(
+            <button key={f} onClick={()=>setLogFilter(f)} style={{flex:1,padding:"10px 0",background:"none",border:"none",borderBottom:logFilter===f?"2px solid #fff":"2px solid transparent",color:logFilter===f?"#fff":"#555",cursor:"pointer",fontSize:10,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase"}}>{f}</button>
+          ))}
+        </div>
+      )}
+
       {/* Schedule blocks with checkboxes */}
-      {blocks.map((b,i)=>{
+      {filteredLogBlocks.map((b,i)=>{
         const bc:Record<string,string>={supplement:"#2d5a2d",meal:"#5a4d2d",training:"#2d2d5a",focus:"#5a2d5a"};
         const borderColor=bc[b.type]||"#333";
         const blockDone=b.items.every(item=>checks[`${b.label}__${item}`]);

@@ -54,6 +54,8 @@ export default defineSchema({
     unitsPerDay: v.number(),
     unitLabel: v.string(),
     notes: v.string(),
+    links: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
+    researchNotes: v.optional(v.string()),
   }).index("by_user", ["userId"])
     .index("by_user_itemId", ["userId", "itemId"]),
 

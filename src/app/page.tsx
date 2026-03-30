@@ -259,7 +259,8 @@ interface Block { time:string;label:string;type:string;items:string[];note?:stri
 interface DailyLog { weight?:number;feeling?:number;liftDone?:boolean;ruckDone?:boolean;ruckWeight?:number;notes?:string; }
 interface CycleRecord { id:string;substance:string;startDate:string;endDate?:string;phase:"on"|"off"; }
 interface MaintRecord { id:string;substance:string;startDate:string;endDate?:string; }
-interface SupplyItem { id:string;name:string;cat:string;color:string;supplier:string;supplierUrl:string;costPerOrder:number;unitsPerOrder:number;currentUnits:number;unitsPerDay:number;unitLabel:string;notes:string; }
+interface ResearchLink { label:string;url:string; }
+interface SupplyItem { id:string;name:string;cat:string;color:string;supplier:string;supplierUrl:string;costPerOrder:number;unitsPerOrder:number;currentUnits:number;unitsPerDay:number;unitLabel:string;notes:string;links?:ResearchLink[];researchNotes?:string; }
 interface StackItem { name:string;dose:string;freq:string;source:string;price:string;what:string; }
 interface UserStack { id:string;name:string;color:string;notes:string;items:StackItem[];mode:"inactive"|"daily"|"once";activeSince?:string;activeDate?:string;fromRef?:string; }
 
@@ -456,19 +457,44 @@ function SupplyPage(){
   },[supplyRaw.length]);
   // Map Convex rows back to SupplyItem shape
   const supply:SupplyItem[]=supplyRaw.length>0
-    ?supplyRaw.map(r=>({id:(r as {itemId:string}).itemId,name:r.name,cat:r.cat,color:r.color,supplier:r.supplier,supplierUrl:r.supplierUrl,costPerOrder:r.costPerOrder,unitsPerOrder:r.unitsPerOrder,currentUnits:r.currentUnits,unitsPerDay:r.unitsPerDay,unitLabel:r.unitLabel,notes:r.notes}))
+    ?supplyRaw.map(r=>({id:(r as {itemId:string}).itemId,name:r.name,cat:r.cat,color:r.color,supplier:r.supplier,supplierUrl:r.supplierUrl,costPerOrder:r.costPerOrder,unitsPerOrder:r.unitsPerOrder,currentUnits:r.currentUnits,unitsPerDay:r.unitsPerDay,unitLabel:r.unitLabel,notes:r.notes,links:(r as {links?:ResearchLink[]}).links||[],researchNotes:(r as {researchNotes?:string}).researchNotes}))
     :DEFAULT_SUPPLY;
-  const setSupply=(_:unknown)=>{}; // unused — edits go directly via upsertSupplyItem
+  const setSupply=(_:unknown)=>{}; // unused
   void setSupply;
+  const saveResearchNotes=useMutation(api.protocol.saveResearchNotes);
+
   const[editing,setEditing]=useState<string|null>(null);
   const[editBuf,setEditBuf]=useState<Partial<SupplyItem>>({});
   const[sortBy,setSortBy]=useState<"name"|"cost"|"runway">("runway");
+  const[researching,setResearching]=useState<string|null>(null);  // itemId being researched
+  const[researchOpen,setResearchOpen]=useState<string|null>(null); // itemId with panel open
 
-  const startEdit=(item:SupplyItem)=>{setEditing(item.id);setEditBuf({...item});};
+  // Get active supply names + stacks for context
+  const activeStacksRaw=useQuery(api.protocol.getStacks)??[];
+  const activeStackContext=activeStacksRaw
+    .filter(s=>s.mode==="daily"||s.mode==="once")
+    .flatMap(s=>(s.items as StackItem[]).map(i=>i.name).filter(Boolean));
+  const allActiveItems=supply.filter(i=>i.unitsPerDay>0).map(i=>i.name);
+  const fullContext=[...new Set([...activeStackContext,...allActiveItems])];
+
+  const runResearch=async(item:SupplyItem)=>{
+    setResearching(item.id);
+    setResearchOpen(item.id);
+    try{
+      const res=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({supplement:item.name,activeStack:fullContext.filter(n=>n!==item.name),currentProtocol:"maintenance"})});
+      const data=await res.json();
+      if(data.result){
+        saveResearchNotes({itemId:item.id,researchNotes:data.result});
+      }
+    }catch(e){console.error(e);}
+    setResearching(null);
+  };
+
+  const startEdit=(item:SupplyItem)=>{setEditing(item.id);setEditBuf({...item,links:item.links||[]});};
   const saveEdit=()=>{
     if(!editing)return;
     const merged={...supply.find(i=>i.id===editing),...editBuf} as SupplyItem;
-    upsertSupplyItem({itemId:merged.id,name:merged.name,cat:merged.cat,color:merged.color,supplier:merged.supplier,supplierUrl:merged.supplierUrl,costPerOrder:merged.costPerOrder,unitsPerOrder:merged.unitsPerOrder,currentUnits:merged.currentUnits,unitsPerDay:merged.unitsPerDay,unitLabel:merged.unitLabel,notes:merged.notes});
+    upsertSupplyItem({itemId:merged.id,name:merged.name,cat:merged.cat,color:merged.color,supplier:merged.supplier,supplierUrl:merged.supplierUrl,costPerOrder:merged.costPerOrder,unitsPerOrder:merged.unitsPerOrder,currentUnits:merged.currentUnits,unitsPerDay:merged.unitsPerDay,unitLabel:merged.unitLabel,notes:merged.notes,links:merged.links||[],researchNotes:merged.researchNotes});
     setEditing(null);setEditBuf({});
   };
   const cancelEdit=()=>{setEditing(null);setEditBuf({});};
@@ -568,9 +594,52 @@ function SupplyPage(){
                   ))}
                 </div>
 
-                {/* Edit button */}
+                {/* Action buttons row */}
                 {!isEdit&&(
-                  <button onClick={()=>startEdit(item)} style={{width:"100%",padding:"7px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#555",fontSize:11,cursor:"pointer",fontWeight:600}}>✎ Edit supply &amp; costs</button>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>startEdit(item)} style={{flex:1,padding:"7px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#555",fontSize:11,cursor:"pointer",fontWeight:600}}>✎ Edit</button>
+                    <button onClick={()=>researching===item.id?null:runResearch(item)} disabled={researching===item.id} style={{flex:1,padding:"7px",background:researching===item.id?"#141a14":"#0a1a0a",border:"1px solid #1a3a1a",borderRadius:6,color:researching===item.id?"#555":"#6fcf6f",fontSize:11,cursor:researching===item.id?"default":"pointer",fontWeight:600}}>{researching===item.id?"🔬 Researching…":"🔬 Gemini Research"}</button>
+                    {(item.researchNotes||item.links?.length)&&<button onClick={()=>setResearchOpen(researchOpen===item.id?null:item.id)} style={{padding:"7px 10px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#6f8fcf",fontSize:12,cursor:"pointer"}}>{researchOpen===item.id?"▲":"▼"}</button>}
+                  </div>
+                )}
+
+                {/* Research / links panel */}
+                {!isEdit&&researchOpen===item.id&&(
+                  <div style={{marginTop:8,background:"#090f09",border:"1px solid #1a2a1a",borderRadius:6,padding:12}}>
+                    {/* Links */}
+                    {item.links&&item.links.length>0&&(
+                      <div style={{marginBottom:10}}>
+                        <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:6}}>RESEARCH LINKS</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {item.links.map((lnk,li)=>(
+                            <a key={li} href={lnk.url} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#6f8fcf",textDecoration:"none",display:"flex",alignItems:"center",gap:6,padding:"5px 8px",background:"#0d0d0d",borderRadius:4,border:"1px solid #1a1a2a"}}>
+                              <span style={{fontSize:10}}>🔗</span>
+                              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lnk.label||lnk.url}</span>
+                              <span style={{fontSize:10,color:"#333"}}>↗</span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Research notes */}
+                    {item.researchNotes&&(
+                      <div>
+                        <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:6}}>GEMINI RESEARCH</div>
+                        <div style={{fontSize:11,color:"#888",lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"inherit"}}>
+                          {item.researchNotes.split("\n").map((line,li)=>{
+                            const isH=line.startsWith("## ");
+                            const cleaned=line.replace(/^##\s*/,"").replace(/\*\*(.*?)\*\*/g,"$1");
+                            return isH
+                              ?<div key={li} style={{fontSize:10,fontWeight:800,color:"#6fcf6f",letterSpacing:"0.08em",marginTop:li>0?10:0,marginBottom:3}}>{cleaned}</div>
+                              :<div key={li} style={{color:line.startsWith("-")||line.startsWith("•")?"#aaa":"#777",paddingLeft:line.startsWith("-")||line.startsWith("•")?8:0}}>{cleaned||"\u00a0"}</div>;
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {!item.researchNotes&&!item.links?.length&&(
+                      <div style={{fontSize:11,color:"#333",fontStyle:"italic"}}>No research yet. Tap 🔬 Gemini Research to generate.</div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -619,6 +688,18 @@ function SupplyPage(){
                     <div>
                       <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>NOTES</div>
                       <textarea value={(buf.notes)||""} onChange={e=>setEditBuf(p=>({...p,notes:e.target.value}))} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:6,padding:"8px 10px",color:"#b0b0b0",fontSize:12,outline:"none",resize:"none",minHeight:48,fontFamily:"inherit"}}/>
+                    </div>
+                    {/* Research Links */}
+                    <div>
+                      <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>RESEARCH LINKS</div>
+                      {(buf.links||[]).map((lnk,li)=>(
+                        <div key={li} style={{display:"flex",gap:6,marginBottom:6}}>
+                          <input value={lnk.label} onChange={e=>setEditBuf(p=>({...p,links:p.links?.map((l,i)=>i===li?{...l,label:e.target.value}:l)||[]}))} placeholder="Label (e.g. PubMed study)" style={{flex:1,background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#6f8fcf",fontSize:11,outline:"none"}}/>
+                          <input value={lnk.url} onChange={e=>setEditBuf(p=>({...p,links:p.links?.map((l,i)=>i===li?{...l,url:e.target.value}:l)||[]}))} placeholder="https://..." style={{flex:2,background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#888",fontSize:11,outline:"none"}}/>
+                          <button onClick={()=>setEditBuf(p=>({...p,links:p.links?.filter((_,i)=>i!==li)||[]}))} style={{padding:"6px 8px",background:"#1a1010",border:"1px solid #3a1a1a",borderRadius:4,color:"#cf6f6f",fontSize:12,cursor:"pointer"}}>×</button>
+                        </div>
+                      ))}
+                      <button onClick={()=>setEditBuf(p=>({...p,links:[...(p.links||[]),{label:"",url:""}]}))} style={{width:"100%",padding:"6px",background:"#0d0d0d",border:"1px dashed #1a2a1a",borderRadius:4,color:"#444",fontSize:10,cursor:"pointer"}}>+ Add link</button>
                     </div>
                     {/* Preview */}
                     {(buf.costPerOrder||0)>0&&(buf.unitsPerOrder||0)>0&&(

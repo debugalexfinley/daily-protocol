@@ -195,6 +195,8 @@ export const upsertSupplyItem = mutation({
     unitsPerDay: v.number(),
     unitLabel: v.string(),
     notes: v.string(),
+    links: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
+    researchNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { itemId, ...fields } = args;
@@ -207,6 +209,17 @@ export const upsertSupplyItem = mutation({
     } else {
       await ctx.db.insert("supply", { userId: USER, itemId, ...fields });
     }
+  },
+});
+
+export const saveResearchNotes = mutation({
+  args: { itemId: v.string(), researchNotes: v.string() },
+  handler: async (ctx, { itemId, researchNotes }) => {
+    const existing = await ctx.db
+      .query("supply")
+      .withIndex("by_user_itemId", q => q.eq("userId", USER).eq("itemId", itemId))
+      .first();
+    if (existing) await ctx.db.patch(existing._id, { researchNotes });
   },
 });
 

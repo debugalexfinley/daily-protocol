@@ -364,11 +364,43 @@ function checksArrayToRecord(arr: Array<{itemKey:string;done:boolean}>): Record<
 
 function runwayColor(w:number){if(w<2)return"#cf6f6f";if(w<4)return"#cfb86f";return"#6fcf6f";}
 
+// Cycled substances config
+const CYCLED_SUBSTANCES:{name:string;daysOn:number;daysOff:number}[]=[
+  {name:"9-me-BC",daysOn:28,daysOff:0},
+  {name:"Cordyceps",daysOn:56,daysOff:14},
+  {name:"Polygala",daysOn:56,daysOff:14},
+  {name:"Agmatine",daysOn:56,daysOff:14},
+  {name:"BPC-157",daysOn:28,daysOff:14},
+  {name:"Alpha-GPC",daysOn:56,daysOff:14},
+  {name:"Sabroxy",daysOn:56,daysOff:14},
+];
+
 function bestVendorCpu(vendors:Vendor[]):{vendor:Vendor;cpu:number}|null{
   if(!vendors.length)return null;
   let best=vendors[0];let bestCpu=best.unitsPerOrder>0?best.costPerOrder/best.unitsPerOrder:Infinity;
   for(const v of vendors){const cpu=v.unitsPerOrder>0?v.costPerOrder/v.unitsPerOrder:Infinity;if(cpu<bestCpu){best=v;bestCpu=cpu;}}
   return{vendor:best,cpu:bestCpu};
+}
+
+// Fuzzy match: check if item text contains supply compound name
+function findMatchingSupply(itemText:string,supplyItems:{compoundId:string;name:string}[]):{compoundId:string;name:string}|null{
+  const lower=itemText.toLowerCase();
+  for(const s of supplyItems){
+    if(lower.includes(s.name.toLowerCase()))return s;
+    // Try partial matches for common abbreviations
+    const shortName=s.name.replace(/\s*\(.*\)/,"").toLowerCase();
+    if(shortName.length>3&&lower.includes(shortName))return s;
+  }
+  return null;
+}
+
+// Toast component
+function Toast({message,visible}:{message:string;visible:boolean}){
+  return(
+    <div style={{position:"fixed",bottom:80,left:"50%",transform:`translateX(-50%) translateY(${visible?0:20}px)`,background:"#1a2f1a",border:"1px solid #2d5a2d",color:"#6fcf6f",padding:"8px 16px",borderRadius:8,fontSize:12,fontWeight:600,zIndex:100,opacity:visible?1:0,transition:"all 0.3s ease",pointerEvents:"none",whiteSpace:"nowrap"}}>
+      {message}
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -409,14 +441,28 @@ function ResearchDisplay({text,accentColor}:{text:string;accentColor:string}){
 function ScheduleTab(){
   const templates=useQuery(api.protocol.getTemplates)??[];
   const weeklyPlan=useQuery(api.protocol.getWeeklyPlan)??[];
+  const cycleData=useQuery(api.protocol.getCycleTracking)??[];
   const seedTemplates=useMutation(api.protocol.seedTemplates);
   const seedWeeklyPlan=useMutation(api.protocol.seedWeeklyPlan);
   const saveDailyRun=useMutation(api.protocol.saveDailyRun);
+  const upsertTemplate=useMutation(api.protocol.upsertTemplate);
+  const startCycleMut=useMutation(api.protocol.startCycle);
+  const pauseCycleMut=useMutation(api.protocol.pauseCycle);
+  const stopCycleMut=useMutation(api.protocol.stopCycle);
+  const resetCycleMut=useMutation(api.protocol.resetCycle);
   const seededRef=useRef(false);
 
   const[selectedTemplate,setSelectedTemplate]=useState<string>("reset_lift");
   const[filterType,setFilterType]=useState<string>("all");
   const[weeklyOpen,setWeeklyOpen]=useState(false);
+  const[cyclesOpen,setCyclesOpen]=useState(true);
+  const[editingBlock,setEditingBlock]=useState<number|null>(null);
+  const[editBlockBuf,setEditBlockBuf]=useState<Block|null>(null);
+  const[newItemText,setNewItemText]=useState("");
+  const[interactionResults,setInteractionResults]=useState<string|null>(null);
+  const[interactionLoading,setInteractionLoading]=useState(false);
+  const[interactionOpen,setInteractionOpen]=useState(false);
+  const[interactionTemplateId,setInteractionTemplateId]=useState<string|null>(null);
   const upsertWeeklyDay=useMutation(api.protocol.upsertWeeklyDay);
 
   // Seed templates on first load
@@ -454,10 +500,96 @@ function ScheduleTab(){
     saveDailyRun({date:today,templateUsed:(currentTpl as {templateId:string}).templateId,dailyRun:blocks.map(b=>({time:b.time,label:b.label,type:b.type,items:b.items,note:b.note,macros:b.macros,duration:b.duration}))});
   };
 
+  // Save template blocks after edit
+  const saveTemplateBlocks=(newBlocks:Block[])=>{
+    if(!currentTpl)return;
+    const tid=(currentTpl as {templateId:string}).templateId;
+    upsertTemplate({templateId:tid,name:currentTpl.name,color:currentTpl.color,phase:currentTpl.phase,dayType:currentTpl.dayType,blocks:newBlocks.map(b=>({time:b.time,label:b.label,type:b.type,items:b.items,note:b.note,macros:b.macros,duration:b.duration})),sortOrder:(currentTpl as {sortOrder?:number}).sortOrder});
+  };
+
+  // Start editing a block
+  const startEditBlock=(idx:number)=>{
+    const realIdx=filterType==="all"?idx:blocks.indexOf(filteredBlocks[idx]);
+    setEditingBlock(realIdx);
+    setEditBlockBuf({...blocks[realIdx]});
+    setNewItemText("");
+  };
+
+  const saveBlockEdit=()=>{
+    if(editingBlock===null||!editBlockBuf)return;
+    const newBlocks=[...blocks];
+    newBlocks[editingBlock]=editBlockBuf;
+    saveTemplateBlocks(newBlocks);
+    setEditingBlock(null);setEditBlockBuf(null);
+  };
+
+  const deleteBlock=(idx:number)=>{
+    const realIdx=filterType==="all"?idx:blocks.indexOf(filteredBlocks[idx]);
+    if(!confirm(`Delete block "${blocks[realIdx].label}"?`))return;
+    const newBlocks=blocks.filter((_,i)=>i!==realIdx);
+    saveTemplateBlocks(newBlocks);
+  };
+
+  const addBlock=()=>{
+    const newBlock:Block={time:"12:00 PM",label:"New Block",type:"supplement",items:["New item"]};
+    saveTemplateBlocks([...blocks,newBlock]);
+  };
+
+  const addItemToBlock=()=>{
+    if(!editBlockBuf||!newItemText.trim())return;
+    setEditBlockBuf({...editBlockBuf,items:[...editBlockBuf.items,newItemText.trim()]});
+    setNewItemText("");
+  };
+
+  const removeItemFromBlock=(itemIdx:number)=>{
+    if(!editBlockBuf)return;
+    setEditBlockBuf({...editBlockBuf,items:editBlockBuf.items.filter((_,i)=>i!==itemIdx)});
+  };
+
+  // Interaction checker
+  const checkInteractions=async()=>{
+    if(!currentTpl)return;
+    const tid=(currentTpl as {templateId:string}).templateId;
+    // Use cached if same template
+    if(interactionTemplateId===tid&&interactionResults){setInteractionOpen(true);return;}
+    setInteractionLoading(true);setInteractionOpen(true);
+    const suppItems=blocks.filter(b=>b.type==="supplement").flatMap(b=>b.items);
+    const list=suppItems.join(", ");
+    try{
+      const res=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({supplement:"Interaction Analysis",activeStack:[],currentProtocol:"custom",customPrompt:`Analyze these supplements for potential interactions, contraindications, or timing conflicts: ${list}. Flag any dangerous combinations, suggest optimal timing separations, and note any that compete for absorption. Format with severity: [DANGER] for red, [CAUTION] for amber, [OK] for green.`})});
+      const data=await res.json();
+      setInteractionResults(data.result||"No results returned.");
+      setInteractionTemplateId(tid);
+    }catch(e){setInteractionResults("Error checking interactions: "+(e as Error).message);}
+    setInteractionLoading(false);
+  };
+
   // Assign template to a weekly day
   const assignDay=(day:string,templateId:string)=>{
     const existing=weeklyPlan.find(w=>w.dayOfWeek===day);
     upsertWeeklyDay({dayOfWeek:day,templateId,flags:(existing?.flags as string[])??[]});
+  };
+
+  // Cycle tracker helpers
+  const getCycleInfo=(compoundName:string)=>{
+    const cycle=cycleData.find(c=>c.compoundName===compoundName);
+    const config=CYCLED_SUBSTANCES.find(s=>s.name===compoundName);
+    if(!cycle||!config)return null;
+    const start=new Date(cycle.startDate+"T12:00:00");
+    const now=new Date();
+    const totalDays=Math.floor((now.getTime()-start.getTime())/86400000)+1;
+    if(cycle.status==="stopped")return{status:"stopped" as const,week:0,totalWeeks:0,pct:0};
+    if(cycle.status==="on"){
+      const weekOn=Math.ceil(totalDays/7);
+      const totalWeeksOn=Math.ceil(config.daysOn/7);
+      const pct=Math.min(100,(totalDays/config.daysOn)*100);
+      return{status:"on" as const,week:weekOn,totalWeeks:totalWeeksOn,pct,daysIn:totalDays,daysTotal:config.daysOn};
+    }
+    // off
+    const weekOff=Math.ceil(totalDays/7);
+    const totalWeeksOff=Math.ceil(config.daysOff/7);
+    const pct=Math.min(100,(totalDays/config.daysOff)*100);
+    return{status:"off" as const,week:weekOff,totalWeeks:totalWeeksOff,pct};
   };
 
   return(
@@ -469,7 +601,10 @@ function ScheduleTab(){
             <div style={{fontSize:9,color:"#555",letterSpacing:"0.15em",marginBottom:3}}>SCHEDULE TEMPLATE</div>
             <div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{currentTpl?.name||"Select Template"}</div>
           </div>
-          <button onClick={pushToToday} style={{padding:"10px 16px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:8,color:"#6fcf6f",fontSize:12,fontWeight:700,cursor:"pointer"}}>▶ Push to Today</button>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={checkInteractions} disabled={interactionLoading} style={{padding:"10px 12px",background:"#2a1a2a",border:"1px solid #5a2d5a",borderRadius:8,color:interactionLoading?"#666":"#cf6fcf",fontSize:12,fontWeight:700,cursor:interactionLoading?"default":"pointer"}}>{interactionLoading?"⏳":"⚡"} Check</button>
+            <button onClick={pushToToday} style={{padding:"10px 16px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:8,color:"#6fcf6f",fontSize:12,fontWeight:700,cursor:"pointer"}}>▶ Push to Today</button>
+          </div>
         </div>
 
         {/* Template pills */}
@@ -478,7 +613,7 @@ function ScheduleTab(){
             const tid=(t as {templateId:string}).templateId;
             const active=tid===selectedTemplate;
             return(
-              <button key={tid} onClick={()=>setSelectedTemplate(tid)} style={{padding:"8px 14px",borderRadius:20,border:`1px solid ${active?t.color+"80":"#2a2a2a"}`,background:active?t.color+"20":"#111",color:active?t.color:"#666",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>{t.name}</button>
+              <button key={tid} onClick={()=>{setSelectedTemplate(tid);if(interactionTemplateId!==tid)setInteractionResults(null);}} style={{padding:"8px 14px",borderRadius:20,border:`1px solid ${active?t.color+"80":"#2a2a2a"}`,background:active?t.color+"20":"#111",color:active?t.color:"#666",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>{t.name}</button>
             );
           })}
         </div>
@@ -491,17 +626,123 @@ function ScheduleTab(){
         </div>
       </div>
 
+      {/* Interaction results */}
+      {interactionOpen&&interactionResults&&(
+        <div style={{margin:"12px 16px",background:"#1a1a2a",border:"1px solid #2d2d5a",borderRadius:8,overflow:"hidden"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderBottom:"1px solid #2d2d5a"}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#cf6fcf",letterSpacing:"0.06em"}}>⚡ INTERACTION ANALYSIS</span>
+            <button onClick={()=>setInteractionOpen(false)} style={{background:"none",border:"none",color:"#666",cursor:"pointer",fontSize:14}}>✕</button>
+          </div>
+          <div style={{padding:14,maxHeight:400,overflowY:"auto"}}>
+            {interactionResults.split("\n").map((line,i)=>{
+              const isDanger=line.includes("[DANGER]")||line.toLowerCase().includes("danger");
+              const isCaution=line.includes("[CAUTION]")||line.toLowerCase().includes("caution")||line.toLowerCase().includes("warning");
+              const isOk=line.includes("[OK]");
+              const color=isDanger?"#cf6f6f":isCaution?"#cfb86f":isOk?"#6fcf6f":"#888";
+              return<div key={i} style={{fontSize:11,color,lineHeight:1.7,marginBottom:line.trim()?0:4}}>{line||"\u00A0"}</div>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Cycle Tracker */}
+      <div style={{padding:"12px 16px 0"}}>
+        <button onClick={()=>setCyclesOpen(!cyclesOpen)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"#111",border:"1px solid #1f1f1f",borderRadius:8,cursor:"pointer",color:"#e0e0e0",marginBottom:cyclesOpen?8:0}}>
+          <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.06em"}}>🔄 CYCLE TRACKER</span>
+          <span style={{color:"#555"}}>{cyclesOpen?"▲":"▼"}</span>
+        </button>
+        {cyclesOpen&&(
+          <div style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:8,padding:12,marginBottom:8}}>
+            {CYCLED_SUBSTANCES.map(sub=>{
+              const cycle=cycleData.find(c=>c.compoundName===sub.name);
+              const info=getCycleInfo(sub.name);
+              const statusColor=!cycle?"#444":info?.status==="on"?"#6fcf6f":info?.status==="off"?"#cfb86f":"#cf6f6f";
+              const barBg=!cycle?"#1a1a1a":info?.status==="on"?"#1a2f1a":info?.status==="off"?"#2a2a1a":"#2a1a1a";
+              const barFg=statusColor;
+              return(
+                <div key={sub.name} style={{marginBottom:10,padding:"8px 0",borderBottom:"1px solid #1a1a1a"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#e0e0e0"}}>{sub.name}</span>
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      {!cycle&&<button onClick={()=>startCycleMut({compoundName:sub.name,startDate:todayStr()})} style={{padding:"3px 8px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:4,color:"#6fcf6f",fontSize:9,fontWeight:700,cursor:"pointer"}}>START</button>}
+                      {cycle&&info?.status==="on"&&<button onClick={()=>pauseCycleMut({compoundName:sub.name})} style={{padding:"3px 8px",background:"#2a2a1a",border:"1px solid #5a4d2d",borderRadius:4,color:"#cfb86f",fontSize:9,fontWeight:700,cursor:"pointer"}}>PAUSE</button>}
+                      {cycle&&info?.status==="off"&&<button onClick={()=>startCycleMut({compoundName:sub.name,startDate:todayStr()})} style={{padding:"3px 8px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:4,color:"#6fcf6f",fontSize:9,fontWeight:700,cursor:"pointer"}}>RESUME</button>}
+                      {cycle&&<button onClick={()=>stopCycleMut({compoundName:sub.name})} style={{padding:"3px 8px",background:"#2a1a1a",border:"1px solid #5a2d2d",borderRadius:4,color:"#cf6f6f",fontSize:9,fontWeight:700,cursor:"pointer"}}>STOP</button>}
+                      {cycle&&<button onClick={()=>resetCycleMut({compoundName:sub.name})} style={{padding:"3px 6px",background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:4,color:"#555",fontSize:9,cursor:"pointer"}}>↺</button>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{flex:1,height:6,background:barBg,borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${info?.pct??0}%`,background:barFg,borderRadius:3,transition:"width 0.3s"}}/>
+                    </div>
+                    <span style={{fontSize:10,color:statusColor,fontWeight:700,minWidth:90,textAlign:"right"}}>
+                      {!cycle?"NOT STARTED":info?.status==="stopped"?"STOPPED":info?.status==="on"?`Week ${info.week}/${info.totalWeeks}`:`OFF — Wk ${info?.week}/${info?.totalWeeks}`}
+                    </span>
+                  </div>
+                  <div style={{fontSize:9,color:"#444",marginTop:2}}>{sub.daysOn}d on / {sub.daysOff||"stop"}d off</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Blocks */}
-      <div style={{padding:"20px 16px"}}>
+      <div style={{padding:"12px 16px"}}>
         {filteredBlocks.map((b,i)=>{
+          const realIdx=filterType==="all"?i:blocks.indexOf(b);
+          const isEditing=editingBlock===realIdx;
           const bc:Record<string,string>={supplement:"#2d5a2d",meal:"#5a4d2d",training:"#2d2d5a",focus:"#5a2d5a"};
           const borderColor=bc[b.type]||"#333";
+
+          if(isEditing&&editBlockBuf){
+            return(
+              <div key={i} style={{borderLeft:`3px solid ${borderColor}`,paddingLeft:16,marginBottom:20,background:"#0d0d0d",border:"1px solid #2a2a2a",borderRadius:8,padding:14}}>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:3}}>TIME</div>
+                    <input value={editBlockBuf.time} onChange={e=>setEditBlockBuf({...editBlockBuf,time:e.target.value})} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#e0e0e0",fontSize:12,outline:"none",fontFamily:"monospace"}}/>
+                  </div>
+                  <div style={{flex:2}}>
+                    <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:3}}>LABEL</div>
+                    <input value={editBlockBuf.label} onChange={e=>setEditBlockBuf({...editBlockBuf,label:e.target.value})} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#e0e0e0",fontSize:12,outline:"none"}}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:3}}>TYPE</div>
+                    <select value={editBlockBuf.type} onChange={e=>setEditBlockBuf({...editBlockBuf,type:e.target.value})} style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#e0e0e0",fontSize:12,outline:"none"}}>
+                      <option value="supplement">supplement</option><option value="meal">meal</option><option value="training">training</option><option value="focus">focus</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:3}}>NOTE</div>
+                <input value={editBlockBuf.note||""} onChange={e=>setEditBlockBuf({...editBlockBuf,note:e.target.value||undefined})} placeholder="Optional note" style={{width:"100%",background:"#111",border:"1px solid #222",borderRadius:4,padding:"6px 8px",color:"#cf6f6f",fontSize:11,outline:"none",marginBottom:8}}/>
+                <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>ITEMS ({editBlockBuf.items.length})</div>
+                {editBlockBuf.items.map((item,ii)=>(
+                  <div key={ii} style={{display:"flex",gap:4,marginBottom:3}}>
+                    <input value={item} onChange={e=>{const newItems=[...editBlockBuf.items];newItems[ii]=e.target.value;setEditBlockBuf({...editBlockBuf,items:newItems});}} style={{flex:1,background:"#111",border:"1px solid #1f1f1f",borderRadius:4,padding:"5px 8px",color:"#b0b0b0",fontSize:12,outline:"none"}}/>
+                    <button onClick={()=>removeItemFromBlock(ii)} style={{padding:"5px 8px",background:"#1a1010",border:"1px solid #3a1a1a",borderRadius:4,color:"#cf6f6f",fontSize:11,cursor:"pointer"}}>✕</button>
+                  </div>
+                ))}
+                <div style={{display:"flex",gap:4,marginTop:4,marginBottom:8}}>
+                  <input value={newItemText} onChange={e=>setNewItemText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addItemToBlock();}} placeholder="Add item..." style={{flex:1,background:"#111",border:"1px dashed #222",borderRadius:4,padding:"5px 8px",color:"#888",fontSize:11,outline:"none"}}/>
+                  <button onClick={addItemToBlock} style={{padding:"5px 10px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:4,color:"#6fcf6f",fontSize:11,cursor:"pointer"}}>+</button>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={saveBlockEdit} style={{flex:2,padding:"8px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:6,color:"#6fcf6f",fontSize:11,fontWeight:700,cursor:"pointer"}}>✓ Save</button>
+                  <button onClick={()=>{setEditingBlock(null);setEditBlockBuf(null);}} style={{flex:1,padding:"8px",background:"#1a1a1a",border:"1px solid #222",borderRadius:6,color:"#666",fontSize:11,cursor:"pointer"}}>Cancel</button>
+                  <button onClick={()=>{deleteBlock(i);setEditingBlock(null);setEditBlockBuf(null);}} style={{padding:"8px 10px",background:"#2a1a1a",border:"1px solid #5a2d2d",borderRadius:6,color:"#cf6f6f",fontSize:11,cursor:"pointer"}}>🗑</button>
+                </div>
+              </div>
+            );
+          }
+
           return(
-            <div key={i} style={{borderLeft:`3px solid ${borderColor}`,paddingLeft:16,marginBottom:20}}>
+            <div key={i} onClick={()=>startEditBlock(i)} style={{borderLeft:`3px solid ${borderColor}`,paddingLeft:16,marginBottom:20,cursor:"pointer"}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
                 <span style={{fontFamily:"monospace",fontSize:12,color:"#8a8a8a",minWidth:72}}>{b.time}</span>
                 <TypeBadge type={b.type}/>
                 {b.duration&&<span style={{fontSize:10,color:"#666",fontStyle:"italic"}}>{b.duration}</span>}
+                <span style={{fontSize:9,color:"#333",marginLeft:"auto"}}>tap to edit</span>
               </div>
               <div style={{fontWeight:700,fontSize:14,color:"#e0e0e0",marginBottom:6}}>{b.label}</div>
               {b.items.map((item,ii)=>(
@@ -512,6 +753,10 @@ function ScheduleTab(){
             </div>
           );
         })}
+        {/* Add Block button */}
+        {currentTpl&&(
+          <button onClick={addBlock} style={{width:"100%",padding:"10px",background:"#0d0d0d",border:"1px dashed #2a2a2a",borderRadius:8,color:"#444",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:8}}>+ Add Block</button>
+        )}
       </div>
 
       {/* Weekly Planner */}
@@ -526,7 +771,6 @@ function ScheduleTab(){
               {WEEKLY.map(d=>{
                 const assigned=weeklyPlan.find(w=>w.dayOfWeek===d.day);
                 const tplId=assigned?.templateId||"";
-                const tpl=templates.find(t=>(t as {templateId:string}).templateId===tplId);
                 return(
                   <div key={d.day} style={{flex:1,borderRadius:6,padding:"8px 4px",textAlign:"center",background:d.type==="lift"?"#111828":"#0d1a0d",border:`1px solid ${d.type==="lift"?"#1e2d4a":"#1a2f1a"}`}}>
                     <div style={{fontSize:11,fontWeight:700,color:"#ccc",marginBottom:4}}>{d.day}</div>
@@ -557,11 +801,16 @@ function LogTab(){
   const isToday=date===today;
   const dailyLog=useQuery(api.protocol.getDailyLog,{date});
   const allLogs=useQuery(api.protocol.getDailyLogs)??[];
+  const supplyItems=useQuery(api.protocol.getSupply)??[];
   const checkKey=`${date}_log`;
   const checksRaw=useQuery(api.protocol.getChecks,{checkKey})??[];
   const checks=checksArrayToRecord(checksRaw as Array<{itemKey:string;done:boolean}>);
   const toggleCheck=useMutation(api.protocol.toggleCheck);
+  const adjustStock=useMutation(api.protocol.adjustSupplyStock);
   const upsertDailyLog=useMutation(api.protocol.upsertDailyLog);
+  const[toastMsg,setToastMsg]=useState("");
+  const[toastVisible,setToastVisible]=useState(false);
+  const showToast=(msg:string)=>{setToastMsg(msg);setToastVisible(true);setTimeout(()=>setToastVisible(false),2000);};
 
   const[localWeight,setLocalWeight]=useState<number|undefined>(undefined);
   const[localFeeling,setLocalFeeling]=useState<number|undefined>(undefined);
@@ -662,7 +911,19 @@ function LogTab(){
             {b.items.map((item,ii)=>{
               const key=`${b.label}__${item}`;const done=!!checks[key];
               return(
-                <button key={ii} onClick={()=>toggleCheck({checkKey,itemKey:key,done:!done})} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",cursor:"pointer",padding:"4px 0",textAlign:"left",width:"100%"}}>
+                <button key={ii} onClick={()=>{
+                  const newDone=!done;
+                  toggleCheck({checkKey,itemKey:key,done:newDone});
+                  // Auto-decrement supply for supplement blocks
+                  if(b.type==="supplement"){
+                    const match=findMatchingSupply(item,supplyItems.map(s=>({compoundId:(s as {compoundId:string}).compoundId,name:s.name})));
+                    if(match){
+                      const delta=newDone?-1:1;
+                      adjustStock({compoundId:match.compoundId,delta});
+                      showToast(newDone?`📦 ${match.name} -1`:`📦 ${match.name} +1`);
+                    }
+                  }
+                }} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",cursor:"pointer",padding:"4px 0",textAlign:"left",width:"100%"}}>
                   <div style={{width:16,height:16,borderRadius:"50%",flexShrink:0,border:`1.5px solid ${done?"#6fcf6f":"#2d2d2d"}`,background:done?"#6fcf6f":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
                     {done&&<span style={{fontSize:9,color:"#0d0d0d",fontWeight:900}}>✓</span>}
                   </div>
@@ -739,6 +1000,7 @@ function LogTab(){
           <span style={{fontSize:9,color:"#555"}}>■ <span style={{color:"#1a1a1a"}}>No data</span></span>
         </div>
       </div>
+      <Toast message={toastMsg} visible={toastVisible}/>
     </div>
   );
 }
@@ -823,6 +1085,66 @@ function SupplyTab(){
           </div>
         )}
       </div>
+
+      {/* Cost Dashboard */}
+      {(()=>{
+        // Category breakdown
+        const catCosts:Record<string,number>={};
+        for(const item of supplyRaw){
+          const d=derive(item);
+          const cat=item.category;
+          catCosts[cat]=(catCosts[cat]||0)+d.cpWeek;
+        }
+        const catEntries=Object.entries(catCosts).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+        const maxCatCost=catEntries.length?catEntries[0][1]:1;
+
+        // Top 5 most expensive
+        const top5=[...supplyRaw].sort((a,b)=>derive(b).cpWeek-derive(a).cpWeek).slice(0,5);
+
+        return(
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #1a1a1a"}}>
+            <div style={{fontSize:9,color:"#555",letterSpacing:"0.15em",marginBottom:10}}>COST DASHBOARD</div>
+
+            {/* Weekly/Monthly totals */}
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <div style={{flex:1,background:"#0d0d0d",border:"1px solid #1f1f1f",borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>WEEKLY</div>
+                <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:"#cfb86f"}}>${totalCpWeek.toFixed(2)}</div>
+              </div>
+              <div style={{flex:1,background:"#0d0d0d",border:"1px solid #1f1f1f",borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:4}}>MONTHLY</div>
+                <div style={{fontSize:18,fontWeight:800,fontFamily:"monospace",color:"#6fcf6f"}}>${totalCpMonth.toFixed(2)}</div>
+              </div>
+            </div>
+
+            {/* Category breakdown bars */}
+            <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginBottom:6}}>BY CATEGORY</div>
+            {catEntries.map(([cat,cost])=>(
+              <div key={cat} style={{marginBottom:6}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <span style={{fontSize:10,color:"#aaa",textTransform:"capitalize"}}>{cat}</span>
+                  <span style={{fontSize:10,fontFamily:"monospace",color:"#cfb86f"}}>${cost.toFixed(2)}/wk</span>
+                </div>
+                <div style={{height:4,background:"#1a1a1a",borderRadius:2}}>
+                  <div style={{height:"100%",width:`${(cost/maxCatCost)*100}%`,background:"#3a5a3a",borderRadius:2}}/>
+                </div>
+              </div>
+            ))}
+
+            {/* Top 5 */}
+            <div style={{fontSize:9,color:"#555",letterSpacing:"0.1em",marginTop:12,marginBottom:6}}>TOP 5 MOST EXPENSIVE</div>
+            {top5.map((item,i)=>{
+              const d=derive(item);
+              return(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid #141414"}}>
+                  <span style={{fontSize:11,color:"#ccc"}}>{i+1}. {item.name}</span>
+                  <span style={{fontSize:11,fontFamily:"monospace",color:"#cfb86f"}}>${d.cpMonth.toFixed(2)}/mo</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Sort */}
       <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",background:"#0d0d0d"}}>

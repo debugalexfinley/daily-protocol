@@ -118,4 +118,14 @@ export default defineSchema({
     itemKey: v.string(),
     done: v.boolean(),
   }).index("by_user_key", ["userId", "checkKey"]),
+
+  // Cycle tracking for cycling compounds
+  cycleTracking: defineTable({
+    userId: v.string(),
+    compoundName: v.string(),
+    startDate: v.string(),
+    status: v.string(), // "on" | "off" | "stopped"
+    currentDay: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_user_compound", ["userId", "compoundName"]),
 });

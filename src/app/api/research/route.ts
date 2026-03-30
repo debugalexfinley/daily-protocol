@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const { supplement, activeStack, currentProtocol } = await req.json();
+  const { supplement, activeStack, currentProtocol, customPrompt } = await req.json();
 
   if (!supplement) return NextResponse.json({ error: "No supplement provided" }, { status: 400 });
 
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     ? activeStack.join(", ")
     : "none specified";
 
-  const prompt = `You are a research assistant for a biohacker who has a deep understanding of supplements, peptides, and nootropics. 
+  const prompt = customPrompt || `You are a research assistant for a biohacker who has a deep understanding of supplements, peptides, and nootropics. 
 
 Provide a comprehensive but concise research summary for: **${supplement}**
 

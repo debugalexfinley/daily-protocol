@@ -466,6 +466,80 @@ export const toggleCheck = mutation({
   },
 });
 
+// ═══════════════════════════════════════════
+// SUPPLY STOCK ADJUSTMENT (auto-decrement)
+// ═══════════════════════════════════════════
+
+export const adjustSupplyStock = mutation({
+  args: { compoundId: v.string(), delta: v.number() },
+  handler: async (ctx, { compoundId, delta }) => {
+    const existing = await ctx.db.query("supply")
+      .withIndex("by_user_compoundId", q => q.eq("userId", USER).eq("compoundId", compoundId)).first();
+    if (existing) {
+      const newStock = Math.max(0, existing.currentStock + delta);
+      await ctx.db.patch(existing._id, { currentStock: newStock });
+    }
+  },
+});
+
+// ═══════════════════════════════════════════
+// CYCLE TRACKING
+// ═══════════════════════════════════════════
+
+export const getCycleTracking = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("cycleTracking")
+      .withIndex("by_user", q => q.eq("userId", USER)).collect();
+  },
+});
+
+export const startCycle = mutation({
+  args: { compoundName: v.string(), startDate: v.string() },
+  handler: async (ctx, { compoundName, startDate }) => {
+    const existing = await ctx.db.query("cycleTracking")
+      .withIndex("by_user_compound", q => q.eq("userId", USER).eq("compoundName", compoundName)).first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { startDate, status: "on", currentDay: 1 });
+    } else {
+      await ctx.db.insert("cycleTracking", { userId: USER, compoundName, startDate, status: "on", currentDay: 1 });
+    }
+  },
+});
+
+export const pauseCycle = mutation({
+  args: { compoundName: v.string() },
+  handler: async (ctx, { compoundName }) => {
+    const existing = await ctx.db.query("cycleTracking")
+      .withIndex("by_user_compound", q => q.eq("userId", USER).eq("compoundName", compoundName)).first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { status: "off" });
+    }
+  },
+});
+
+export const stopCycle = mutation({
+  args: { compoundName: v.string() },
+  handler: async (ctx, { compoundName }) => {
+    const existing = await ctx.db.query("cycleTracking")
+      .withIndex("by_user_compound", q => q.eq("userId", USER).eq("compoundName", compoundName)).first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { status: "stopped" });
+    }
+  },
+});
+
+export const resetCycle = mutation({
+  args: { compoundName: v.string() },
+  handler: async (ctx, { compoundName }) => {
+    const existing = await ctx.db.query("cycleTracking")
+      .withIndex("by_user_compound", q => q.eq("userId", USER).eq("compoundName", compoundName)).first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+  },
+});
+
 // History: get substance usage over last N days
 export const getSubstanceHistory = query({
   args: { substanceName: v.string(), days: v.optional(v.number()) },

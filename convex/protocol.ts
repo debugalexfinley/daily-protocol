@@ -1,4 +1,5 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
 const USER = "nathan"; // single-user app
@@ -197,6 +198,8 @@ export const upsertSupplyItem = mutation({
     notes: v.string(),
     links: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
     researchNotes: v.optional(v.string()),
+    deepResearchNotes: v.optional(v.string()),
+    deepResearchStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { itemId, ...fields } = args;
@@ -220,6 +223,126 @@ export const saveResearchNotes = mutation({
       .withIndex("by_user_itemId", q => q.eq("userId", USER).eq("itemId", itemId))
       .first();
     if (existing) await ctx.db.patch(existing._id, { researchNotes });
+  },
+});
+
+// Internal mutation to write deep research results back
+export const _saveDeepResearch = internalMutation({
+  args: { itemId: v.string(), deepResearchNotes: v.string(), status: v.string() },
+  handler: async (ctx, { itemId, deepResearchNotes, status }) => {
+    const existing = await ctx.db
+      .query("supply")
+      .withIndex("by_user_itemId", q => q.eq("userId", USER).eq("itemId", itemId))
+      .first();
+    if (existing) await ctx.db.patch(existing._id, { deepResearchNotes, deepResearchStatus: status });
+  },
+});
+
+// Public mutation to set pending status
+export const setDeepResearchPending = mutation({
+  args: { itemId: v.string() },
+  handler: async (ctx, { itemId }) => {
+    const existing = await ctx.db
+      .query("supply")
+      .withIndex("by_user_itemId", q => q.eq("userId", USER).eq("itemId", itemId))
+      .first();
+    if (existing) await ctx.db.patch(existing._id, { deepResearchStatus: "pending", deepResearchNotes: undefined });
+  },
+});
+
+// Action: calls Gemini Deep Research API (can do async HTTP, runs server-side)
+export const runDeepResearch = action({
+  args: {
+    itemId: v.string(),
+    supplementName: v.string(),
+    activeStack: v.array(v.string()),
+  },
+  handler: async (ctx, { itemId, supplementName, activeStack }) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("No GEMINI_API_KEY set");
+
+    const activeList = activeStack.length ? activeStack.join(", ") : "none";
+    const query = `Perform comprehensive deep research on the supplement/nootropic/peptide: "${supplementName}"
+
+The user's current active protocol includes: ${activeList}
+
+Please research and provide:
+1. Mechanism of action (with specific receptors, pathways, and enzymes involved)
+2. Evidence quality — what do actual clinical trials show vs. anecdotal? Include specific study citations.
+3. Optimal dosing, timing, and form — what does the evidence support?
+4. Cycling requirements — is tolerance a concern? What does research say?
+5. Synergies with their current stack (${activeList}) — cite mechanistic reasons
+6. Conflicts or cautions with their current stack — any pharmacological interactions?
+7. Best sources / quality markers to look for when buying
+8. Any recent research (2023-2025) that changes previous understanding
+9. Honest verdict: is this worth taking for cognitive performance, body composition, or recovery?
+
+Be specific, cite sources with URLs where possible, and flag anything where evidence is weak or only animal/in-vitro.`;
+
+    // Start the deep research interaction
+    const createResp = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({ input: query, agent: "deep-research-pro-preview-12-2025", background: true }),
+    });
+
+    if (!createResp.ok) {
+      const err = await createResp.text();
+      await ctx.runMutation(internal.protocol._saveDeepResearch, {
+        itemId, deepResearchNotes: `Research failed: ${err}`, status: "failed"
+      });
+      return;
+    }
+
+    const interaction = await createResp.json();
+    const interactionId = interaction.name?.split("/").pop() || interaction.id;
+
+    // Poll until complete (Convex actions can run up to 10 minutes)
+    let attempts = 0;
+    while (attempts < 60) {
+      await new Promise(r => setTimeout(r, 10000)); // wait 10s
+      attempts++;
+
+      const pollResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/interactions/${interactionId}`, {
+        headers: { "x-goog-api-key": apiKey },
+      });
+
+      if (!pollResp.ok) continue;
+      const data = await pollResp.json();
+      const status = data.status || data.state || "";
+
+      if (status === "completed" || status === "COMPLETED") {
+        // Extract text from output
+        let report = "";
+        if (data.output?.text) report = data.output.text;
+        else if (typeof data.output === "string") report = data.output;
+        else {
+          const msgs = data.messages || data.turns || [];
+          for (const m of msgs.reverse()) {
+            const parts = m.content?.parts || m.parts || [];
+            for (const p of parts) {
+              if (p.text) { report = p.text; break; }
+            }
+            if (report) break;
+          }
+        }
+        if (!report) report = JSON.stringify(data.output || data, null, 2);
+        await ctx.runMutation(internal.protocol._saveDeepResearch, { itemId, deepResearchNotes: report, status: "done" });
+        return;
+      }
+
+      if (status === "failed" || status === "FAILED") {
+        await ctx.runMutation(internal.protocol._saveDeepResearch, {
+          itemId, deepResearchNotes: `Deep research failed after ${attempts * 10}s`, status: "failed"
+        });
+        return;
+      }
+    }
+
+    // Timeout
+    await ctx.runMutation(internal.protocol._saveDeepResearch, {
+      itemId, deepResearchNotes: "Deep research timed out after 10 minutes.", status: "failed"
+    });
   },
 });
 

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 
@@ -260,7 +260,7 @@ interface DailyLog { weight?:number;feeling?:number;liftDone?:boolean;ruckDone?:
 interface CycleRecord { id:string;substance:string;startDate:string;endDate?:string;phase:"on"|"off"; }
 interface MaintRecord { id:string;substance:string;startDate:string;endDate?:string; }
 interface ResearchLink { label:string;url:string; }
-interface SupplyItem { id:string;name:string;cat:string;color:string;supplier:string;supplierUrl:string;costPerOrder:number;unitsPerOrder:number;currentUnits:number;unitsPerDay:number;unitLabel:string;notes:string;links?:ResearchLink[];researchNotes?:string; }
+interface SupplyItem { id:string;name:string;cat:string;color:string;supplier:string;supplierUrl:string;costPerOrder:number;unitsPerOrder:number;currentUnits:number;unitsPerDay:number;unitLabel:string;notes:string;links?:ResearchLink[];researchNotes?:string;deepResearchNotes?:string;deepResearchStatus?:string; }
 interface StackItem { name:string;dose:string;freq:string;source:string;price:string;what:string; }
 interface UserStack { id:string;name:string;color:string;notes:string;items:StackItem[];mode:"inactive"|"daily"|"once";activeSince?:string;activeDate?:string;fromRef?:string; }
 
@@ -443,6 +443,29 @@ function TrackPage(){
   );
 }
 
+// ─── RESEARCH DISPLAY HELPER ───
+function ResearchDisplay({text,accentColor}:{text:string;accentColor:string}){
+  return(
+    <div style={{fontSize:11,color:"#888",lineHeight:1.75,fontFamily:"inherit"}}>
+      {text.split("\n").map((line,i)=>{
+        if(line.startsWith("## ")||line.startsWith("# ")){
+          const cleaned=line.replace(/^#+\s*/,"").replace(/\*\*(.*?)\*\*/g,"$1");
+          return<div key={i} style={{fontSize:10,fontWeight:800,color:accentColor,letterSpacing:"0.08em",marginTop:i>0?12:0,marginBottom:3}}>{cleaned}</div>;
+        }
+        if(line.startsWith("- ")||line.startsWith("• ")||line.startsWith("* ")){
+          const cleaned=line.replace(/^[-•*]\s*/,"").replace(/\*\*(.*?)\*\*/g,"$1");
+          return<div key={i} style={{color:"#aaa",paddingLeft:10,display:"flex",gap:4}}><span style={{color:"#444",flexShrink:0}}>›</span><span>{cleaned}</span></div>;
+        }
+        // Detect URLs and make them clickable
+        const urlRegex=/(https?:\/\/[^\s)]+)/g;
+        const parts=line.split(urlRegex);
+        const cleaned=parts.map((p,pi)=>urlRegex.test(p)?<a key={pi} href={p} target="_blank" rel="noreferrer" style={{color:"#6f8fcf",wordBreak:"break-all"}}>{p}</a>:<span key={pi}>{p.replace(/\*\*(.*?)\*\*/g,"$1")}</span>);
+        return<div key={i} style={{color:line.trim()?"#777":"transparent",minHeight:line.trim()?undefined:8}}>{cleaned}</div>;
+      })}
+    </div>
+  );
+}
+
 // ─── SUPPLY PAGE ───
 function SupplyPage(){
   const supplyRaw=useQuery(api.protocol.getSupply)??[];
@@ -457,17 +480,19 @@ function SupplyPage(){
   },[supplyRaw.length]);
   // Map Convex rows back to SupplyItem shape
   const supply:SupplyItem[]=supplyRaw.length>0
-    ?supplyRaw.map(r=>({id:(r as {itemId:string}).itemId,name:r.name,cat:r.cat,color:r.color,supplier:r.supplier,supplierUrl:r.supplierUrl,costPerOrder:r.costPerOrder,unitsPerOrder:r.unitsPerOrder,currentUnits:r.currentUnits,unitsPerDay:r.unitsPerDay,unitLabel:r.unitLabel,notes:r.notes,links:(r as {links?:ResearchLink[]}).links||[],researchNotes:(r as {researchNotes?:string}).researchNotes}))
+    ?supplyRaw.map(r=>({id:(r as {itemId:string}).itemId,name:r.name,cat:r.cat,color:r.color,supplier:r.supplier,supplierUrl:r.supplierUrl,costPerOrder:r.costPerOrder,unitsPerOrder:r.unitsPerOrder,currentUnits:r.currentUnits,unitsPerDay:r.unitsPerDay,unitLabel:r.unitLabel,notes:r.notes,links:(r as {links?:ResearchLink[]}).links||[],researchNotes:(r as {researchNotes?:string}).researchNotes,deepResearchNotes:(r as {deepResearchNotes?:string}).deepResearchNotes,deepResearchStatus:(r as {deepResearchStatus?:string}).deepResearchStatus}))
     :DEFAULT_SUPPLY;
   const setSupply=(_:unknown)=>{}; // unused
   void setSupply;
   const saveResearchNotes=useMutation(api.protocol.saveResearchNotes);
+  const setDeepResearchPending=useMutation(api.protocol.setDeepResearchPending);
+  const runDeepResearch=useAction(api.protocol.runDeepResearch);
 
   const[editing,setEditing]=useState<string|null>(null);
   const[editBuf,setEditBuf]=useState<Partial<SupplyItem>>({});
   const[sortBy,setSortBy]=useState<"name"|"cost"|"runway">("runway");
-  const[researching,setResearching]=useState<string|null>(null);  // itemId being researched
-  const[researchOpen,setResearchOpen]=useState<string|null>(null); // itemId with panel open
+  const[quickResearching,setQuickResearching]=useState<string|null>(null);
+  const[researchOpen,setResearchOpen]=useState<string|null>(null);
 
   // Get active supply names + stacks for context
   const activeStacksRaw=useQuery(api.protocol.getStacks)??[];
@@ -477,17 +502,21 @@ function SupplyPage(){
   const allActiveItems=supply.filter(i=>i.unitsPerDay>0).map(i=>i.name);
   const fullContext=[...new Set([...activeStackContext,...allActiveItems])];
 
-  const runResearch=async(item:SupplyItem)=>{
-    setResearching(item.id);
+  const runQuickResearch=async(item:SupplyItem)=>{
+    setQuickResearching(item.id);
     setResearchOpen(item.id);
     try{
       const res=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({supplement:item.name,activeStack:fullContext.filter(n=>n!==item.name),currentProtocol:"maintenance"})});
       const data=await res.json();
-      if(data.result){
-        saveResearchNotes({itemId:item.id,researchNotes:data.result});
-      }
+      if(data.result) saveResearchNotes({itemId:item.id,researchNotes:data.result});
     }catch(e){console.error(e);}
-    setResearching(null);
+    setQuickResearching(null);
+  };
+
+  const startDeepResearch=async(item:SupplyItem)=>{
+    setResearchOpen(item.id);
+    await setDeepResearchPending({itemId:item.id});
+    runDeepResearch({itemId:item.id,supplementName:item.name,activeStack:fullContext.filter(n=>n!==item.name)}).catch(console.error);
   };
 
   const startEdit=(item:SupplyItem)=>{setEditing(item.id);setEditBuf({...item,links:item.links||[]});};
@@ -596,19 +625,27 @@ function SupplyPage(){
 
                 {/* Action buttons row */}
                 {!isEdit&&(
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>startEdit(item)} style={{flex:1,padding:"7px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#555",fontSize:11,cursor:"pointer",fontWeight:600}}>✎ Edit</button>
-                    <button onClick={()=>researching===item.id?null:runResearch(item)} disabled={researching===item.id} style={{flex:1,padding:"7px",background:researching===item.id?"#141a14":"#0a1a0a",border:"1px solid #1a3a1a",borderRadius:6,color:researching===item.id?"#555":"#6fcf6f",fontSize:11,cursor:researching===item.id?"default":"pointer",fontWeight:600}}>{researching===item.id?"🔬 Researching…":"🔬 Gemini Research"}</button>
-                    {(item.researchNotes||item.links?.length)&&<button onClick={()=>setResearchOpen(researchOpen===item.id?null:item.id)} style={{padding:"7px 10px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#6f8fcf",fontSize:12,cursor:"pointer"}}>{researchOpen===item.id?"▲":"▼"}</button>}
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    <button onClick={()=>startEdit(item)} style={{flex:1,minWidth:60,padding:"7px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#555",fontSize:11,cursor:"pointer",fontWeight:600}}>✎ Edit</button>
+                    <button onClick={()=>quickResearching===item.id?null:runQuickResearch(item)} disabled={quickResearching===item.id} style={{flex:2,padding:"7px",background:quickResearching===item.id?"#141414":"#0d0d0d",border:"1px solid #2a2a1a",borderRadius:6,color:quickResearching===item.id?"#555":"#cfb86f",fontSize:11,cursor:quickResearching===item.id?"default":"pointer",fontWeight:600}}>{quickResearching===item.id?"⚡ Thinking…":"⚡ Quick"}</button>
+                    <button onClick={()=>item.deepResearchStatus==="pending"?null:startDeepResearch(item)} disabled={item.deepResearchStatus==="pending"} style={{flex:2,padding:"7px",background:item.deepResearchStatus==="pending"?"#090f09":"#090f09",border:`1px solid ${item.deepResearchStatus==="pending"?"#1a3a1a":"#1a3a1a"}`,borderRadius:6,color:item.deepResearchStatus==="pending"?"#4a8f4a":"#6fcf6f",fontSize:11,cursor:item.deepResearchStatus==="pending"?"default":"pointer",fontWeight:600}}>{item.deepResearchStatus==="pending"?"🔬 Researching…":"🔬 Deep"}</button>
+                    {(item.researchNotes||item.deepResearchNotes||item.links?.length)&&<button onClick={()=>setResearchOpen(researchOpen===item.id?null:item.id)} style={{padding:"7px 10px",background:"#0d0d0d",border:"1px solid #222",borderRadius:6,color:"#6f8fcf",fontSize:12,cursor:"pointer"}}>{researchOpen===item.id?"▲":"▼"}</button>}
+                  </div>
+                )}
+                {/* Pending deep research status pill */}
+                {!isEdit&&item.deepResearchStatus==="pending"&&(
+                  <div style={{marginTop:6,padding:"6px 10px",background:"#090f09",border:"1px solid #1a3a1a",borderRadius:4,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:"#4a8f4a"}}>🔬</span>
+                    <span style={{fontSize:10,color:"#4a8f4a"}}>Deep research running in background… results will appear here when complete.</span>
                   </div>
                 )}
 
                 {/* Research / links panel */}
                 {!isEdit&&researchOpen===item.id&&(
-                  <div style={{marginTop:8,background:"#090f09",border:"1px solid #1a2a1a",borderRadius:6,padding:12}}>
+                  <div style={{marginTop:8,background:"#080d08",border:"1px solid #1a2a1a",borderRadius:6,padding:12}}>
                     {/* Links */}
                     {item.links&&item.links.length>0&&(
-                      <div style={{marginBottom:10}}>
+                      <div style={{marginBottom:12}}>
                         <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:6}}>RESEARCH LINKS</div>
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
                           {item.links.map((lnk,li)=>(
@@ -621,23 +658,22 @@ function SupplyPage(){
                         </div>
                       </div>
                     )}
-                    {/* Research notes */}
-                    {item.researchNotes&&(
-                      <div>
-                        <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:6}}>GEMINI RESEARCH</div>
-                        <div style={{fontSize:11,color:"#888",lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"inherit"}}>
-                          {item.researchNotes.split("\n").map((line,li)=>{
-                            const isH=line.startsWith("## ");
-                            const cleaned=line.replace(/^##\s*/,"").replace(/\*\*(.*?)\*\*/g,"$1");
-                            return isH
-                              ?<div key={li} style={{fontSize:10,fontWeight:800,color:"#6fcf6f",letterSpacing:"0.08em",marginTop:li>0?10:0,marginBottom:3}}>{cleaned}</div>
-                              :<div key={li} style={{color:line.startsWith("-")||line.startsWith("•")?"#aaa":"#777",paddingLeft:line.startsWith("-")||line.startsWith("•")?8:0}}>{cleaned||"\u00a0"}</div>;
-                          })}
-                        </div>
+                    {/* Deep research notes */}
+                    {item.deepResearchNotes&&item.deepResearchStatus==="done"&&(
+                      <div style={{marginBottom:item.researchNotes?12:0}}>
+                        <div style={{fontSize:9,color:"#4a8f4a",letterSpacing:"0.1em",marginBottom:6}}>🔬 DEEP RESEARCH</div>
+                        <ResearchDisplay text={item.deepResearchNotes} accentColor="#6fcf6f"/>
                       </div>
                     )}
-                    {!item.researchNotes&&!item.links?.length&&(
-                      <div style={{fontSize:11,color:"#333",fontStyle:"italic"}}>No research yet. Tap 🔬 Gemini Research to generate.</div>
+                    {/* Quick research notes */}
+                    {item.researchNotes&&(
+                      <div>
+                        <div style={{fontSize:9,color:"#7a7a2a",letterSpacing:"0.1em",marginBottom:6}}>⚡ QUICK SUMMARY</div>
+                        <ResearchDisplay text={item.researchNotes} accentColor="#cfb86f"/>
+                      </div>
+                    )}
+                    {!item.researchNotes&&!item.deepResearchNotes&&!item.links?.length&&(
+                      <div style={{fontSize:11,color:"#333",fontStyle:"italic"}}>No research yet. Tap ⚡ Quick (fast) or 🔬 Deep (2-5 min, web search).</div>
                     )}
                   </div>
                 )}

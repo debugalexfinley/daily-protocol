@@ -56,6 +56,8 @@ export default defineSchema({
     notes: v.string(),
     links: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
     researchNotes: v.optional(v.string()),
+    deepResearchNotes: v.optional(v.string()),
+    deepResearchStatus: v.optional(v.string()), // "pending" | "done" | "failed"
   }).index("by_user", ["userId"])
     .index("by_user_itemId", ["userId", "itemId"]),
 

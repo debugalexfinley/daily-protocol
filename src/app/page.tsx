@@ -1,5 +1,8 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // ─── SCHEDULE DATA ───
 const RESET_LIFT = [
@@ -269,14 +272,11 @@ function fmtCost(n:number){return n<0.01?"<$0.01":n<1?`$${n.toFixed(2)}`:`$${n.t
 function feelingLabel(n:number){if(n<=2)return"💀 Rough";if(n<=4)return"😐 Meh";if(n<=6)return"🙂 Decent";if(n<=8)return"😤 Good";return"🔥 Locked in";}
 function feelingColor(n:number){if(n<=3)return"#cf6f6f";if(n<=5)return"#cfb86f";if(n<=7)return"#6fcf6f";return"#6f8fcf";}
 
-// ─── LOCAL STORAGE ───
-function useLS<T>(key:string,init:T):[T,(v:T|((p:T)=>T))=>void]{
-  const[state,setState]=useState<T>(init);
-  useEffect(()=>{try{const s=localStorage.getItem(key);if(s)setState(JSON.parse(s));}catch{}},[key]);
-  const set=useCallback((v:T|((p:T)=>T))=>{
-    setState(prev=>{const next=typeof v==="function"?(v as (p:T)=>T)(prev):v;try{localStorage.setItem(key,JSON.stringify(next));}catch{}return next;});
-  },[key]);
-  return[state,set];
+// ─── DEBOUNCE HOOK ───
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => { const t = setTimeout(() => setDebounced(value), delay); return () => clearTimeout(t); }, [value, delay]);
+  return debounced;
 }
 
 // ─── TYPE BADGE ───
@@ -321,10 +321,20 @@ function ScheduleBlock({block,checks,onToggle}:{block:Block;checks:Record<string
 }
 
 // ─── TRACK PAGE ───
-function TrackPage({logs,setLogs}:{logs:Record<string,DailyLog>;setLogs:(v:Record<string,DailyLog>|((p:Record<string,DailyLog>)=>Record<string,DailyLog>))=>void}){
+function TrackPage(){
   const[date,setDate]=useState(todayStr());
-  const log=logs[date]||{};
-  const update=(updates:Partial<DailyLog>)=>{setLogs(prev=>({...prev,[date]:{...prev[date],...updates}}));};
+  const logsRaw=useQuery(api.protocol.getLogs)??{};
+  const logs:Record<string,DailyLog>=logsRaw as Record<string,DailyLog>;
+  const upsertLog=useMutation(api.protocol.upsertLog);
+  const log:DailyLog=logs[date]||{};
+  // local optimistic state for the current date
+  const[localLog,setLocalLog]=useState<DailyLog>({});
+  useEffect(()=>{setLocalLog(logs[date]||{});},[date,JSON.stringify(logs[date])]);
+  const update=(updates:Partial<DailyLog>)=>{
+    const next={...localLog,...updates};
+    setLocalLog(next);
+    upsertLog({date,...next});
+  };
   const history=last14Days();
   const navDate=(dir:number)=>{const dt=new Date(date+"T12:00:00");dt.setDate(dt.getDate()+dir);const nd=dt.toISOString().split("T")[0];if(nd<=todayStr())setDate(nd);};
   const isToday=date===todayStr();
@@ -340,7 +350,7 @@ function TrackPage({logs,setLogs}:{logs:Record<string,DailyLog>;setLogs:(v:Recor
       </div>
       {/* Activity */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
-        {[{key:"liftDone" as const,label:"LIFT",icon:"🏋️",active:log.liftDone},{key:"ruckDone" as const,label:"RUCK",icon:"🎒",active:log.ruckDone}].map(t=>(
+        {[{key:"liftDone" as const,label:"LIFT",icon:"🏋️",active:localLog.liftDone},{key:"ruckDone" as const,label:"RUCK",icon:"🎒",active:localLog.ruckDone}].map(t=>(
           <button key={t.key} onClick={()=>update({[t.key]:!t.active})} style={{flex:1,padding:"12px 8px",borderRadius:8,border:`1px solid ${t.active?"#2d5a2d":"#1f1f1f"}`,background:t.active?"#1a2f1a":"#111",cursor:"pointer"}}>
             <div style={{fontSize:20,marginBottom:4}}>{t.icon}</div>
             <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.1em",color:t.active?"#6fcf6f":"#444"}}>{t.label}</div>
@@ -348,12 +358,12 @@ function TrackPage({logs,setLogs}:{logs:Record<string,DailyLog>;setLogs:(v:Recor
           </button>
         ))}
       </div>
-      {log.ruckDone&&(
+      {localLog.ruckDone&&(
         <div style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:8,padding:14,marginBottom:12}}>
           <div style={{fontSize:10,color:"#555",letterSpacing:"0.1em",marginBottom:8}}>RUCK WEIGHT (lbs)</div>
           <div style={{display:"flex",gap:6}}>
             {[20,25,30,35,40].map(w=>(
-              <button key={w} onClick={()=>update({ruckWeight:w})} style={{flex:1,padding:"8px 4px",borderRadius:6,border:`1px solid ${log.ruckWeight===w?"#6f8fcf":"#222"}`,background:log.ruckWeight===w?"#1a1a2f":"#0d0d0d",color:log.ruckWeight===w?"#6f8fcf":"#555",fontSize:12,fontWeight:700,cursor:"pointer"}}>{w}</button>
+              <button key={w} onClick={()=>update({ruckWeight:w})} style={{flex:1,padding:"8px 4px",borderRadius:6,border:`1px solid ${localLog.ruckWeight===w?"#6f8fcf":"#222"}`,background:localLog.ruckWeight===w?"#1a1a2f":"#0d0d0d",color:localLog.ruckWeight===w?"#6f8fcf":"#555",fontSize:12,fontWeight:700,cursor:"pointer"}}>{w}</button>
             ))}
           </div>
         </div>
@@ -362,27 +372,27 @@ function TrackPage({logs,setLogs}:{logs:Record<string,DailyLog>;setLogs:(v:Recor
       <div style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:8,padding:14,marginBottom:12}}>
         <div style={{fontSize:10,color:"#555",letterSpacing:"0.1em",marginBottom:8}}>BODYWEIGHT (lbs)</div>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={()=>update({weight:(log.weight||200)-0.5})} style={{background:"#1a1a1a",border:"1px solid #222",color:"#888",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontSize:18}}>−</button>
-          <input type="number" step="0.5" value={log.weight||""} onChange={e=>update({weight:parseFloat(e.target.value)||undefined})} placeholder="---" style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:28,fontWeight:800,fontFamily:"monospace",color:"#fff",textAlign:"center"}}/>
-          <button onClick={()=>update({weight:(log.weight||200)+0.5})} style={{background:"#1a1a1a",border:"1px solid #222",color:"#888",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontSize:18}}>+</button>
+          <button onClick={()=>update({weight:(localLog.weight||200)-0.5})} style={{background:"#1a1a1a",border:"1px solid #222",color:"#888",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontSize:18}}>−</button>
+          <input type="number" step="0.5" value={localLog.weight||""} onChange={e=>update({weight:parseFloat(e.target.value)||undefined})} placeholder="---" style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:28,fontWeight:800,fontFamily:"monospace",color:"#fff",textAlign:"center"}}/>
+          <button onClick={()=>update({weight:(localLog.weight||200)+0.5})} style={{background:"#1a1a1a",border:"1px solid #222",color:"#888",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontSize:18}}>+</button>
         </div>
       </div>
       {/* Feeling */}
       <div style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:8,padding:14,marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{fontSize:10,color:"#555",letterSpacing:"0.1em"}}>FEELING TODAY</div>
-          {log.feeling&&<span style={{fontSize:12,color:feelingColor(log.feeling)}}>{feelingLabel(log.feeling)}</span>}
+          {localLog.feeling&&<span style={{fontSize:12,color:feelingColor(localLog.feeling)}}>{feelingLabel(localLog.feeling)}</span>}
         </div>
         <div style={{display:"flex",gap:4}}>
           {[1,2,3,4,5,6,7,8,9,10].map(n=>(
-            <button key={n} onClick={()=>update({feeling:n})} style={{flex:1,padding:"10px 2px",borderRadius:4,background:log.feeling===n?feelingColor(n):log.feeling&&n<=log.feeling?`${feelingColor(log.feeling)}22`:"#1a1a1a",border:`1px solid ${log.feeling===n?feelingColor(n):"#222"}`,color:log.feeling===n?"#0d0d0d":log.feeling&&n<=log.feeling?feelingColor(log.feeling):"#333",fontSize:11,fontWeight:800,cursor:"pointer"}}>{n}</button>
+            <button key={n} onClick={()=>update({feeling:n})} style={{flex:1,padding:"10px 2px",borderRadius:4,background:localLog.feeling===n?feelingColor(n):localLog.feeling&&n<=localLog.feeling?`${feelingColor(localLog.feeling)}22`:"#1a1a1a",border:`1px solid ${localLog.feeling===n?feelingColor(n):"#222"}`,color:localLog.feeling===n?"#0d0d0d":localLog.feeling&&n<=localLog.feeling?feelingColor(localLog.feeling):"#333",fontSize:11,fontWeight:800,cursor:"pointer"}}>{n}</button>
           ))}
         </div>
       </div>
       {/* Notes */}
       <div style={{background:"#111",border:"1px solid #1f1f1f",borderRadius:8,padding:14,marginBottom:20}}>
         <div style={{fontSize:10,color:"#555",letterSpacing:"0.1em",marginBottom:8}}>NOTES</div>
-        <textarea value={log.notes||""} onChange={e=>update({notes:e.target.value})} placeholder="PRs, sleep quality, side effects, observations..." style={{width:"100%",background:"transparent",border:"none",outline:"none",color:"#b0b0b0",fontSize:13,lineHeight:1.6,resize:"none",minHeight:70,fontFamily:"inherit"}}/>
+        <textarea value={localLog.notes||""} onChange={e=>update({notes:e.target.value})} placeholder="PRs, sleep quality, side effects, observations..." style={{width:"100%",background:"transparent",border:"none",outline:"none",color:"#b0b0b0",fontSize:13,lineHeight:1.6,resize:"none",minHeight:70,fontFamily:"inherit"}}/>
       </div>
       {/* History */}
       {history.some(d=>logs[d])&&(
@@ -433,7 +443,23 @@ function TrackPage({logs,setLogs}:{logs:Record<string,DailyLog>;setLogs:(v:Recor
 }
 
 // ─── SUPPLY PAGE ───
-function SupplyPage({supply,setSupply}:{supply:SupplyItem[];setSupply:(v:SupplyItem[]|((p:SupplyItem[])=>SupplyItem[]))=>void}){
+function SupplyPage(){
+  const supplyRaw=useQuery(api.protocol.getSupply)??[];
+  const upsertSupplyItem=useMutation(api.protocol.upsertSupplyItem);
+  const seedSupply=useMutation(api.protocol.seedSupply);
+  const seeded=useRef(false);
+  useEffect(()=>{
+    if(!seeded.current&&supplyRaw.length===0){
+      seeded.current=true;
+      seedSupply({items:DEFAULT_SUPPLY.map(i=>({itemId:i.id,name:i.name,cat:i.cat,color:i.color,supplier:i.supplier,supplierUrl:i.supplierUrl,costPerOrder:i.costPerOrder,unitsPerOrder:i.unitsPerOrder,currentUnits:i.currentUnits,unitsPerDay:i.unitsPerDay,unitLabel:i.unitLabel,notes:i.notes}))});
+    }
+  },[supplyRaw.length]);
+  // Map Convex rows back to SupplyItem shape
+  const supply:SupplyItem[]=supplyRaw.length>0
+    ?supplyRaw.map(r=>({id:(r as {itemId:string}).itemId,name:r.name,cat:r.cat,color:r.color,supplier:r.supplier,supplierUrl:r.supplierUrl,costPerOrder:r.costPerOrder,unitsPerOrder:r.unitsPerOrder,currentUnits:r.currentUnits,unitsPerDay:r.unitsPerDay,unitLabel:r.unitLabel,notes:r.notes}))
+    :DEFAULT_SUPPLY;
+  const setSupply=(_:unknown)=>{}; // unused — edits go directly via upsertSupplyItem
+  void setSupply;
   const[editing,setEditing]=useState<string|null>(null);
   const[editBuf,setEditBuf]=useState<Partial<SupplyItem>>({});
   const[sortBy,setSortBy]=useState<"name"|"cost"|"runway">("runway");
@@ -441,7 +467,8 @@ function SupplyPage({supply,setSupply}:{supply:SupplyItem[];setSupply:(v:SupplyI
   const startEdit=(item:SupplyItem)=>{setEditing(item.id);setEditBuf({...item});};
   const saveEdit=()=>{
     if(!editing)return;
-    setSupply(prev=>prev.map(i=>i.id===editing?{...i,...editBuf} as SupplyItem:i));
+    const merged={...supply.find(i=>i.id===editing),...editBuf} as SupplyItem;
+    upsertSupplyItem({itemId:merged.id,name:merged.name,cat:merged.cat,color:merged.color,supplier:merged.supplier,supplierUrl:merged.supplierUrl,costPerOrder:merged.costPerOrder,unitsPerOrder:merged.unitsPerOrder,currentUnits:merged.currentUnits,unitsPerDay:merged.unitsPerDay,unitLabel:merged.unitLabel,notes:merged.notes});
     setEditing(null);setEditBuf({});
   };
   const cancelEdit=()=>{setEditing(null);setEditBuf({});};
@@ -629,39 +656,41 @@ function SupplyPage({supply,setSupply}:{supply:SupplyItem[];setSupply:(v:SupplyI
 }
 
 // ─── CYCLES PAGE ───
-function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setCycles:(v:CycleRecord[]|((p:CycleRecord[])=>CycleRecord[]))=>void;maint:MaintRecord[];setMaint:(v:MaintRecord[]|((p:MaintRecord[])=>MaintRecord[]))=>void}){
+function CyclesPage(){
   const[tab,setTab]=useState<"maint"|"cycles">("maint");
   const[expanded,setExpanded]=useState<string|null>(null);
   const today=todayStr();
 
+  // Convex
+  const cyclesRaw=useQuery(api.protocol.getCycles)??[];
+  const maintRaw=useQuery(api.protocol.getMaintenance)??[];
+  const cvxStartCycle=useMutation(api.protocol.startCycle);
+  const cvxEndCycle=useMutation(api.protocol.endCycle);
+  const cvxDelCycle=useMutation(api.protocol.deleteCycle);
+  const cvxStartMaint=useMutation(api.protocol.startMaintenance);
+  const cvxStopMaint=useMutation(api.protocol.stopMaintenance);
+
+  type CycleRow = typeof cyclesRaw[number];
+  type MaintRow = typeof maintRaw[number];
+
   // ─── MAINTENANCE ───
-  const getMaint=(name:string)=>maint.find(m=>m.substance===name&&!m.endDate);
-  const startMaint=(name:string)=>{
-    const existing=getMaint(name);
-    if(existing)return;
-    setMaint(prev=>[...prev,{id:`${name}_${Date.now()}`,substance:name,startDate:today}]);
-  };
-  const stopMaint=(name:string)=>{
-    setMaint(prev=>prev.map(m=>m.substance===name&&!m.endDate?{...m,endDate:today}:m));
-  };
-  const getMaintHistory=(name:string)=>maint.filter(m=>m.substance===name).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  const getMaint=(name:string)=>maintRaw.find((m:MaintRow)=>m.substanceName===name&&!m.endDate);
+  const startMaint=(name:string)=>cvxStartMaint({substanceName:name,startDate:today});
+  const stopMaint=(name:string)=>cvxStopMaint({substanceName:name,endDate:today});
+  const getMaintHistory=(name:string)=>[...maintRaw.filter((m:MaintRow)=>m.substanceName===name)].sort((a,b)=>b.startDate.localeCompare(a.startDate));
 
   // ─── CYCLES ───
-  const getActiveCycle=(name:string)=>cycles.filter(c=>c.substance===name).sort((a,b)=>b.startDate.localeCompare(a.startDate))[0];
-  const getCycleHistory=(name:string)=>cycles.filter(c=>c.substance===name).sort((a,b)=>b.startDate.localeCompare(a.startDate));
-  const startCycle=(name:string,phase:"on"|"off")=>{
-    const ex=getActiveCycle(name);
-    if(ex&&!ex.endDate)setCycles(prev=>prev.map(c=>c.id===ex.id?{...c,endDate:today}:c));
-    setCycles(prev=>[...prev,{id:`${name}_${Date.now()}`,substance:name,startDate:today,phase}]);
-  };
-  const endCycle=(id:string)=>setCycles(prev=>prev.map(c=>c.id===id?{...c,endDate:today}:c));
-  const delCycle=(id:string)=>setCycles(prev=>prev.filter(c=>c.id!==id));
+  const getActiveCycle=(name:string)=>[...cyclesRaw.filter((c:CycleRow)=>c.substanceName===name)].sort((a,b)=>b.startDate.localeCompare(a.startDate))[0] as CycleRow|undefined;
+  const getCycleHistory=(name:string)=>[...cyclesRaw.filter((c:CycleRow)=>c.substanceName===name)].sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  const startCycle=(name:string,phase:"on"|"off")=>cvxStartCycle({substanceName:name,phase,startDate:today});
+  const endCycle=(id:Id<"cycles">)=>cvxEndCycle({id,endDate:today});
+  const delCycle=(id:Id<"cycles">)=>cvxDelCycle({id});
 
   return(
     <div style={{padding:"0 0 40px"}}>
       {/* Sub-tabs */}
       <div style={{display:"flex",borderBottom:"1px solid #1f1f1f",background:"#0d0d0d"}}>
-        {[{id:"maint",label:"MAINTENANCE",sub:`${maint.filter(m=>!m.endDate).length} active`},{id:"cycles",label:"SPECIFIC CYCLES",sub:`${cycles.filter(c=>!c.endDate).length} active`}].map(t=>(
+        {[{id:"maint",label:"MAINTENANCE",sub:`${maintRaw.filter((m:{endDate?:string})=>!m.endDate).length} active`},{id:"cycles",label:"SPECIFIC CYCLES",sub:`${cyclesRaw.filter((c:{endDate?:string})=>!c.endDate).length} active`}].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id as "maint"|"cycles")} style={{flex:1,padding:"12px 8px",background:"none",border:"none",borderBottom:tab===t.id?"2px solid #fff":"2px solid transparent",color:tab===t.id?"#fff":"#555",cursor:"pointer"}}>
             <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.06em"}}>{t.label}</div>
             <div style={{fontSize:9,color:tab===t.id?"#888":"#3a3a3a",marginTop:2}}>{t.sub}</div>
@@ -700,10 +729,10 @@ function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setC
                 {isExp&&(
                   <div style={{borderTop:"1px solid #1a1a1a",padding:14}}>
                     <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:8}}>HISTORY</div>
-                    {history.map((rec,i)=>{
+                    {history.map((rec:{_id:string;startDate:string;endDate?:string},i)=>{
                       const dur=rec.endDate?daysBetween(rec.startDate,rec.endDate):daysBetween(rec.startDate,today)+1;
                       return(
-                        <div key={rec.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<history.length-1?"1px solid #141414":"none"}}>
+                        <div key={rec._id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<history.length-1?"1px solid #141414":"none"}}>
                           <div style={{width:6,height:6,borderRadius:"50%",background:rec.endDate?"#333":sub.color,flexShrink:0}}/>
                           <div style={{flex:1}}>
                             <span style={{fontSize:11,color:rec.endDate?"#555":"#ccc",fontWeight:600}}>{rec.endDate?"Past":"Active"}</span>
@@ -763,7 +792,7 @@ function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setC
                       </>
                     ):(
                       <>
-                        <button onClick={()=>endCycle(active.id)} style={{flex:2,padding:"8px",background:"#2a1a1a",border:"1px solid #5a2d2d",borderRadius:6,color:"#cf6f6f",fontSize:11,fontWeight:700,cursor:"pointer"}}>■ END {active.phase.toUpperCase()}</button>
+                        <button onClick={()=>endCycle(active._id as Id<"cycles">)} style={{flex:2,padding:"8px",background:"#2a1a1a",border:"1px solid #5a2d2d",borderRadius:6,color:"#cf6f6f",fontSize:11,fontWeight:700,cursor:"pointer"}}>■ END {active.phase.toUpperCase()}</button>
                         {sub.offWeeks&&active.phase==="on"&&<button onClick={()=>startCycle(sub.name,"off")} style={{flex:1,padding:"8px",background:"#1a1a1a",border:"1px solid #222",borderRadius:6,color:"#666",fontSize:11,fontWeight:700,cursor:"pointer"}}>→ BREAK</button>}
                         {active.phase==="off"&&<button onClick={()=>startCycle(sub.name,"on")} style={{flex:1,padding:"8px",background:`${sub.color}15`,border:`1px solid ${sub.color}40`,borderRadius:6,color:sub.color,fontSize:11,fontWeight:700,cursor:"pointer"}}>→ ON</button>}
                       </>
@@ -777,17 +806,17 @@ function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setC
                     {history.length>0&&(
                       <>
                         <div style={{fontSize:9,color:"#444",letterSpacing:"0.1em",marginBottom:8}}>HISTORY</div>
-                        {history.map((rec,i)=>{
+                        {history.map((rec:{_id:string;startDate:string;endDate?:string;phase:string},i)=>{
                           const dur=rec.endDate?daysBetween(rec.startDate,rec.endDate):daysBetween(rec.startDate,today)+1;
                           return(
-                            <div key={rec.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<history.length-1?"1px solid #141414":"none"}}>
+                            <div key={rec._id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<history.length-1?"1px solid #141414":"none"}}>
                               <div style={{width:6,height:6,borderRadius:"50%",background:rec.phase==="on"?sub.color:"#444",flexShrink:0}}/>
                               <div style={{flex:1}}>
                                 <span style={{fontSize:11,color:rec.phase==="on"?"#ccc":"#666",fontWeight:600}}>{rec.phase==="on"?"ON":"BREAK"}</span>
                                 <span style={{fontSize:10,color:"#444",marginLeft:8}}>{formatDate(rec.startDate)} → {rec.endDate?formatDate(rec.endDate):"now"}</span>
                               </div>
                               <span style={{fontSize:11,fontFamily:"monospace",color:"#555"}}>{dur}d</span>
-                              <button onClick={()=>delCycle(rec.id)} style={{background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:14,padding:"0 2px"}}>×</button>
+                              <button onClick={()=>delCycle(rec._id as Id<"cycles">)} style={{background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:14,padding:"0 2px"}}>×</button>
                             </div>
                           );
                         })}
@@ -809,7 +838,7 @@ function CyclesPage({cycles,setCycles,maint,setMaint}:{cycles:CycleRecord[];setC
 const BLANK_ITEM:StackItem={name:"",dose:"",freq:"",source:"",price:"",what:""};
 const STACK_COLORS=["#6f8fcf","#6fcfcf","#cf6fcf","#cfcf6f","#6fcf6f","#cf6f6f","#cfb86f","#8f8fcf","#cf8f6f","#8fcf6f"];
 
-function StacksPage({stacks,setStacks}:{stacks:UserStack[];setStacks:(v:UserStack[]|((p:UserStack[])=>UserStack[]))=>void}){
+function StacksPage(){
   const[view,setView]=useState<"active"|"all"|"ref">("active");
   const[expanded,setExpanded]=useState<string|null>(null);
   const[editing,setEditing]=useState<string|null>(null);
@@ -817,44 +846,59 @@ function StacksPage({stacks,setStacks}:{stacks:UserStack[];setStacks:(v:UserStac
   const[showImport,setShowImport]=useState(false);
   const today=todayStr();
 
+  const stacksRaw=useQuery(api.protocol.getStacks)??[];
+  const cvxUpsertStack=useMutation(api.protocol.upsertStack);
+  const cvxDeleteStack=useMutation(api.protocol.deleteStack);
+
+  // Map to UserStack shape using stackId as local id
+  const stacks:UserStack[]=stacksRaw.map(r=>({
+    id:(r as {stackId:string}).stackId,
+    name:r.name,color:r.color,notes:r.notes,
+    items:r.items as StackItem[],
+    mode:r.mode as "inactive"|"daily"|"once",
+    activeSince:r.activeSince,activeDate:r.activeDate,fromRef:r.fromRef,
+  }));
+
+  const upsertStack=(s:UserStack)=>cvxUpsertStack({stackId:s.id,name:s.name,color:s.color,notes:s.notes,items:s.items,mode:s.mode,activeSince:s.activeSince,activeDate:s.activeDate,fromRef:s.fromRef,sortOrder:Date.now()});
+
   // import from reference
   const importRef=(ref:{name:string;color:string;items:{name:string;dose:string;freq:string;source:string;price:string;what:string}[]})=>{
     const exists=stacks.find(s=>s.fromRef===ref.name||s.name===ref.name);
     if(exists){alert("Already imported.");return;}
     const ns:UserStack={id:`stack_${Date.now()}`,name:ref.name,color:ref.color,notes:"",items:ref.items.map(i=>({...i})),mode:"inactive",fromRef:ref.name};
-    setStacks(prev=>[ns,...prev]);
+    upsertStack(ns);
     setShowImport(false);
     setExpanded(ns.id);
   };
 
   const newStack=()=>{
     const ns:UserStack={id:`stack_${Date.now()}`,name:"New Stack",color:STACK_COLORS[stacks.length%STACK_COLORS.length],notes:"",items:[{...BLANK_ITEM}],mode:"inactive"};
-    setStacks(prev=>[ns,...prev]);
+    upsertStack(ns);
     setEditing(ns.id);
     setEditBuf({...ns});
   };
 
   const saveEdit=()=>{
     if(!editing)return;
-    setStacks(prev=>prev.map(s=>s.id===editing?{...s,...editBuf} as UserStack:s));
+    const base=stacks.find(s=>s.id===editing);
+    if(base)upsertStack({...base,...editBuf} as UserStack);
     setEditing(null);setEditBuf({});
   };
 
   const deleteStack=(id:string)=>{
     if(!confirm("Delete this stack?"))return;
-    setStacks(prev=>prev.filter(s=>s.id!==id));
+    cvxDeleteStack({stackId:id});
     if(expanded===id)setExpanded(null);
   };
 
   const setMode=(id:string,mode:"inactive"|"daily"|"once")=>{
-    setStacks(prev=>prev.map(s=>{
-      if(s.id!==id)return s;
-      const updates:Partial<UserStack>={mode};
-      if(mode==="daily"&&!s.activeSince)updates.activeSince=today;
-      if(mode==="once")updates.activeDate=today;
-      if(mode==="inactive"){updates.activeSince=undefined;updates.activeDate=undefined;}
-      return{...s,...updates};
-    }));
+    const s=stacks.find(x=>x.id===id);
+    if(!s)return;
+    const updates:Partial<UserStack>={mode};
+    if(mode==="daily"&&!s.activeSince)updates.activeSince=today;
+    if(mode==="once")updates.activeDate=today;
+    if(mode==="inactive"){updates.activeSince=undefined;updates.activeDate=undefined;}
+    upsertStack({...s,...updates});
   };
 
   const activeStacks=stacks.filter(s=>s.mode==="daily"||s.mode==="once");
@@ -1067,17 +1111,16 @@ export default function DailyProtocol(){
   const[phase,setPhase]=useState("reset");
   const[dayType,setDayType]=useState("lift");
 
-  const[allChecks,setAllChecks]=useLS<Record<string,Record<string,boolean>>>("dp_checks",{});
-  const[logs,setLogs]=useLS<Record<string,DailyLog>>("dp_logs",{});
-  const[cycles,setCycles]=useLS<CycleRecord[]>("dp_cycles",[]);
-  const[maint,setMaint]=useLS<MaintRecord[]>("dp_maint",[]);
-  const[supply,setSupply]=useLS<SupplyItem[]>("dp_supply",DEFAULT_SUPPLY);
-  const[stacks,setStacks]=useLS<UserStack[]>("dp_stacks",[]);
-
   const today=todayStr();
   const checkKey=`${today}_${phase}_${dayType}`;
-  const todayChecks=allChecks[checkKey]||{};
-  const toggleCheck=(k:string)=>setAllChecks(prev=>({...prev,[checkKey]:{...prev[checkKey],[k]:!prev[checkKey]?.[k]}}));
+  const todayChecksRaw=useQuery(api.protocol.getChecks,{checkKey})??{};
+  const cvxToggleCheck=useMutation(api.protocol.toggleCheck);
+  const todayChecks:Record<string,boolean>=todayChecksRaw as Record<string,boolean>;
+  const toggleCheck=(k:string)=>cvxToggleCheck({checkKey,itemKey:k,done:!todayChecks[k]});
+
+  // For schedule active stacks banner
+  const stacksRaw=useQuery(api.protocol.getStacks)??[];
+  const activeStacksToday=stacksRaw.filter(s=>s.mode==="daily"||(s.mode==="once"&&s.activeDate===today));
 
   const sched:Record<string,Record<string,Block[]>>={reset:{lift:RESET_LIFT as Block[],ruck:RESET_RUCK as Block[]},post:{lift:POST_LIFT as Block[],ruck:POST_RUCK as Block[]}};
   const schedule=sched[phase][dayType];
@@ -1153,7 +1196,7 @@ export default function DailyProtocol(){
           </div>
           {/* Active stacks banner */}
           {(()=>{
-            const activeToday=stacks.filter(s=>s.mode==="daily"||(s.mode==="once"&&s.activeDate===today));
+            const activeToday=activeStacksToday;
             if(!activeToday.length)return null;
             return(
               <div style={{margin:"12px 16px 0",background:"#141a14",border:"1px solid #2a3a2a",borderRadius:8,padding:12}}>
@@ -1163,17 +1206,17 @@ export default function DailyProtocol(){
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {activeToday.map(s=>(
-                    <div key={s.id} style={{background:"#0d0d0d",border:`1px solid ${s.color}30`,borderRadius:6,padding:"8px 10px"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.items.length?4:0}}>
+                    <div key={(s as {stackId:string}).stackId} style={{background:"#0d0d0d",border:`1px solid ${s.color}30`,borderRadius:6,padding:"8px 10px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:(s.items as StackItem[]).length?4:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <div style={{width:6,height:6,borderRadius:"50%",background:s.color}}/>
                           <span style={{fontSize:12,fontWeight:700,color:"#e0e0e0"}}>{s.name}</span>
                         </div>
                         <span style={{fontSize:8,color:s.mode==="daily"?"#6fcf6f":"#cfb86f",fontWeight:700,letterSpacing:"0.1em"}}>{s.mode==="daily"?"DAILY":"TODAY"}</span>
                       </div>
-                      {s.items.length>0&&(
+                      {(s.items as StackItem[]).length>0&&(
                         <div style={{display:"flex",flexWrap:"wrap",gap:"2px 8px",marginLeft:12}}>
-                          {s.items.filter(i=>i.name).map((it,ii)=>(
+                          {(s.items as StackItem[]).filter(i=>i.name).map((it,ii)=>(
                             <span key={ii} style={{fontSize:10,color:"#888"}}>{it.name}{it.dose?` ${it.dose}`:""}</span>
                           ))}
                         </div>
@@ -1227,10 +1270,10 @@ export default function DailyProtocol(){
         </>
       )}
 
-      {page==="track"&&<TrackPage logs={logs} setLogs={setLogs}/>}
-      {page==="cycles"&&<CyclesPage cycles={cycles} setCycles={setCycles} maint={maint} setMaint={setMaint}/>}
-      {page==="supply"&&<SupplyPage supply={supply} setSupply={setSupply}/>}
-      {page==="supps"&&<StacksPage stacks={stacks} setStacks={setStacks}/>}
+      {page==="track"&&<TrackPage/>}
+      {page==="cycles"&&<CyclesPage/>}
+      {page==="supply"&&<SupplyPage/>}
+      {page==="supps"&&<StacksPage/>}
     </div>
   );
 }

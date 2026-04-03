@@ -8,60 +8,56 @@ import { api } from "../../convex/_generated/api";
 // ═══════════════════════════════════════════════════════════
 
 const RESET_LIFT = [
-  { time:"5:15 AM",label:"WAKE",type:"supplement",items:["Pinealon 1mg — oral, fasted","Alpha-GPC 600mg","Bromantane 100mg — sublingual","BPC-157 500mcg — oral","9-me-BC 20mg","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Thiamine HCL 300–600mg","Magnesium Glycinate 200mg","Creatine 10g"],note:"Chroma Golden Glo glasses ON"},
-  { time:"5:20 AM",label:"PRE-LIFT SNACK",type:"meal",items:["1 banana + 1 tbsp honey","OR rice cake + honey","Quick carbs only — ~45g carb"]},
+  { time:"5:15 AM",label:"WAKE",type:"supplement",items:["Pinealon 1mg — oral, fasted","Alpha-GPC 600mg","Bromantane 100mg — sublingual","BPC-157 500mcg — oral","9-me-BC 20mg","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","B1 (Thiamine HCL) 300–600mg","Magnesium Glycinate 200mg","Creatine 10g"],note:"Chroma Golden Glo glasses ON"},
+  { time:"5:20 AM",label:"PRE-LIFT SNACK",type:"meal",items:["1 banana + 1 tbsp honey","OR rice cake + honey","Quick carbs only — ~45g carb","8oz orange juice"]},
   { time:"5:30 AM",label:"LIFT",type:"training",items:["Heavy compounds","Intra-workout: 1 scoop intra carb (156 cal, 39g carb)"],duration:"60 min"},
   { time:"6:30 AM",label:"RUCK",type:"training",items:["20–30 lbs plate carrier","Neighborhood walk — catch sunrise"],note:"Golden Glo OFF — real sunlight now",duration:"30 min"},
-  { time:"7:15 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["175g cooked oats","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk","12oz orange juice"],macros:"711 cal · 47g P · 97g C · 14g F"},
+  { time:"7:15 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["70g dry oats (175g cooked equiv)","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk"],macros:"711 cal · 47g P · 97g C · 14g F"},
   { time:"7:15 AM",label:"SUPPLEMENTS — ROUND 2",type:"supplement",items:["Cordyceps 1000mg","Polygala Tenuifolia 100mg","Agmatine Sulfate 750mg"]},
   { time:"10:00 AM",label:"BPC-157",type:"supplement",items:["BPC-157 500mcg — oral"]},
   { time:"12:00 PM",label:"MEAL 2 — CHICKEN & RICE",type:"meal",items:["6oz chicken breast (170g)","1 cup jasmine rice (158g)","1 cup mixed vegetables (160g)","½ avocado (75g)"],macros:"690 cal · 63g P · 56g C · 19g F"},
   { time:"1:30 PM",label:"SUPPLEMENTS — ROUND 3",type:"supplement",items:["BPC-157 500mcg — oral","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Cordyceps 1000mg","Polygala Tenuifolia 100mg","Agmatine Sulfate 750mg"],note:"Last Semax dose — do not dose after 3 PM"},
   { time:"5:30 PM",label:"MEAL 3 — STEAK & POTATO",type:"meal",items:["6oz sirloin steak (170g)","8oz white potato (227g)","1 cup mixed vegetables (160g)"],macros:"648 cal · 60g P · 54g C · 17g F"},
   { time:"6:00 PM",label:"BPC-157",type:"supplement",items:["BPC-157 500mcg — oral"]},
-  { time:"8:00 PM",label:"RETA INJECTION (Mon/Wed/Fri)",type:"supplement",items:["Retatrutide ~1.33mg SubQ — evening injection","4mg/week split across 3 doses"],note:"Skip on Tue/Thu/Sat/Sun"},
   { time:"SUNSET",label:"EVENING WIND-DOWN",type:"supplement",items:["Polygala Tenuifolia 100mg"],note:"Chroma Nightshades ON"},
-  { time:"10:00 PM",label:"BEFORE BED",type:"supplement",items:["Triacetyluridine 25mg","GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)"],note:"Lights out by 10:15 PM"},
+  { time:"9:00 PM",label:"EVENING INJECTIONS",type:"supplement",items:["GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)","Triacetyluridine 25mg"],note:"Lights out by 10:15 PM"},
 ];
 
 const RESET_RUCK = [
-  { time:"6:00 AM",label:"WAKE",type:"supplement",items:["Pinealon 1mg — oral, fasted","Citicoline 500mg (not Alpha-GPC)","Bromantane 100mg — sublingual","BPC-157 500mcg — oral","9-me-BC 20mg","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Thiamine HCL 300–600mg","Magnesium Glycinate 200mg","Creatine 10g"],note:"No glasses — heading straight outside"},
+  { time:"6:00 AM",label:"WAKE",type:"supplement",items:["Pinealon 1mg — oral, fasted","Citicoline 500mg (not Alpha-GPC)","Bromantane 100mg — sublingual","BPC-157 500mcg — oral","9-me-BC 20mg","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","B1 (Thiamine HCL) 300–600mg","Magnesium Glycinate 200mg","Creatine 10g"],note:"No glasses — heading straight outside"},
   { time:"6:15 AM",label:"FASTED RUCK",type:"training",items:["20–30 lbs plate carrier","Neighborhood walk — sunrise exposure","Fully fasted — max fat oxidation"],duration:"30 min"},
-  { time:"7:00 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["175g cooked oats","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk","NO orange juice on rest days"],macros:"544 cal · 45g P · 58g C · 14g F"},
+  { time:"7:00 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["70g dry oats (175g cooked equiv)","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk"],macros:"544 cal · 45g P · 58g C · 14g F"},
   { time:"7:15 AM",label:"SUPPLEMENTS — ROUND 2",type:"supplement",items:["Cordyceps 1000mg","Polygala Tenuifolia 100mg","Agmatine Sulfate 750mg"]},
   { time:"10:00 AM",label:"BPC-157",type:"supplement",items:["BPC-157 500mcg — oral"]},
   { time:"12:00 PM",label:"MEAL 2 — CHICKEN & RICE",type:"meal",items:["6oz chicken breast (170g)","1 cup jasmine rice (158g)","1 cup mixed vegetables (160g)","½ avocado (75g)"],macros:"690 cal · 63g P · 56g C · 19g F"},
   { time:"1:30 PM",label:"SUPPLEMENTS — ROUND 3",type:"supplement",items:["BPC-157 500mcg — oral","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Cordyceps 1000mg","Polygala Tenuifolia 100mg","Agmatine Sulfate 750mg"],note:"Last Semax dose — do not dose after 3 PM"},
   { time:"5:30 PM",label:"MEAL 3 — STEAK & POTATO",type:"meal",items:["6oz sirloin steak (170g)","8oz white potato (227g)","1 cup mixed vegetables (160g)"],macros:"648 cal · 60g P · 54g C · 17g F"},
   { time:"6:00 PM",label:"BPC-157",type:"supplement",items:["BPC-157 500mcg — oral"]},
-  { time:"8:00 PM",label:"RETA INJECTION (Mon/Wed/Fri)",type:"supplement",items:["Retatrutide ~1.33mg SubQ — evening injection","4mg/week split across 3 doses"],note:"Skip on Tue/Thu/Sat/Sun"},
   { time:"SUNSET",label:"EVENING WIND-DOWN",type:"supplement",items:["Polygala Tenuifolia 100mg"],note:"Chroma Nightshades ON"},
-  { time:"10:00 PM",label:"BEFORE BED",type:"supplement",items:["Triacetyluridine 25mg","GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)"],note:"Lights out by 10:15 PM"},
+  { time:"9:00 PM",label:"EVENING INJECTIONS",type:"supplement",items:["GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)","Triacetyluridine 25mg"],note:"Lights out by 10:15 PM"},
 ];
 
 const POST_LIFT = [
-  { time:"5:15 AM",label:"WAKE — ALL SUPPLEMENTS",type:"supplement",items:["Pinealon 1mg — oral, fasted","Alpha-GPC 600mg","Bromantane 100mg — sublingual","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Thiamine HCL 300–600mg","Magnesium Glycinate 400mg","Creatine 10g","Cordyceps 2000mg","Polygala Tenuifolia 300mg"],note:"Chroma Golden Glo ON · Everything once, AM only"},
+  { time:"5:15 AM",label:"WAKE — ALL SUPPLEMENTS",type:"supplement",items:["Pinealon 1mg — oral, fasted","Alpha-GPC 600mg","Bromantane 100mg — sublingual","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","B1 (Thiamine HCL) 300–600mg","Magnesium Glycinate 400mg","Creatine 10g","Cordyceps 2000mg","Polygala Tenuifolia 300mg"],note:"Chroma Golden Glo ON · Everything once, AM only"},
   { time:"5:15 AM",label:"FOCUS BOOST (AS NEEDED)",type:"focus",items:["Sabroxy — deep work days only","Dynamine — deep work days only","Max 2–3x per week, not daily"],note:"For deep work blocks only"},
-  { time:"5:20 AM",label:"PRE-LIFT SNACK",type:"meal",items:["1 banana + 1 tbsp honey","OR rice cake + honey","Quick carbs only — ~45g carb"]},
+  { time:"5:20 AM",label:"PRE-LIFT SNACK",type:"meal",items:["1 banana + 1 tbsp honey","OR rice cake + honey","Quick carbs only — ~45g carb","8oz orange juice"]},
   { time:"5:30 AM",label:"LIFT",type:"training",items:["Heavy compounds","Intra-workout: 1 scoop intra carb (156 cal, 39g carb)"],duration:"60 min"},
   { time:"6:30 AM",label:"RUCK",type:"training",items:["20–30 lbs plate carrier","Neighborhood walk — catch sunrise"],note:"Golden Glo OFF — real sunlight now",duration:"30 min"},
-  { time:"7:15 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["175g cooked oats","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk","12oz orange juice"],macros:"711 cal · 47g P · 97g C · 14g F"},
+  { time:"7:15 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["70g dry oats (175g cooked equiv)","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk"],macros:"711 cal · 47g P · 97g C · 14g F"},
   { time:"12:00 PM",label:"MEAL 2 — CHICKEN & RICE",type:"meal",items:["6oz chicken breast (170g)","1 cup jasmine rice (158g)","1 cup mixed vegetables (160g)","½ avocado (75g)"],macros:"690 cal · 63g P · 56g C · 19g F"},
   { time:"5:30 PM",label:"MEAL 3 — STEAK & POTATO",type:"meal",items:["6oz sirloin steak (170g)","8oz white potato (227g)","1 cup mixed vegetables (160g)"],macros:"648 cal · 60g P · 54g C · 17g F"},
-  { time:"8:00 PM",label:"RETA INJECTION (Mon/Wed/Fri)",type:"supplement",items:["Retatrutide ~1.33mg SubQ — evening injection","4mg/week split across 3 doses"],note:"Skip on Tue/Thu/Sat/Sun"},
   { time:"SUNSET",label:"NIGHTSHADES ON",type:"supplement",items:["Chroma Nightshades ON"]},
-  { time:"10:00 PM",label:"BEFORE BED",type:"supplement",items:["Triacetyluridine 25mg","GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)"],note:"Lights out by 10:15 PM"},
+  { time:"9:00 PM",label:"EVENING INJECTIONS",type:"supplement",items:["GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)","Triacetyluridine 25mg"],note:"Lights out by 10:15 PM"},
 ];
 
 const POST_RUCK = [
-  { time:"6:00 AM",label:"WAKE — ALL SUPPLEMENTS",type:"supplement",items:["Pinealon 1mg — oral, fasted","Citicoline 500mg (not Alpha-GPC)","Bromantane 100mg — sublingual","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","Thiamine HCL 300–600mg","Magnesium Glycinate 400mg","Creatine 10g","Cordyceps 2000mg","Polygala Tenuifolia 300mg","Agmatine Sulfate 1500mg"],note:"No glasses — heading straight outside · Everything once, AM only"},
+  { time:"6:00 AM",label:"WAKE — ALL SUPPLEMENTS",type:"supplement",items:["Pinealon 1mg — oral, fasted","Citicoline 500mg (not Alpha-GPC)","Bromantane 100mg — sublingual","Semax 300mcg — nasal spray","Selank 250mcg — nasal spray","B1 (Thiamine HCL) 300–600mg","Magnesium Glycinate 400mg","Creatine 10g","Cordyceps 2000mg","Polygala Tenuifolia 300mg","Agmatine Sulfate 1500mg"],note:"No glasses — heading straight outside · Everything once, AM only"},
   { time:"6:15 AM",label:"FASTED RUCK",type:"training",items:["20–30 lbs plate carrier","Neighborhood walk — sunrise exposure","Fully fasted — max fat oxidation"],duration:"30 min"},
-  { time:"7:00 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["175g cooked oats","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk","NO orange juice on rest days"],macros:"544 cal · 45g P · 58g C · 14g F"},
+  { time:"7:00 AM",label:"MEAL 1 — OATMEAL BOWL",type:"meal",items:["70g dry oats (175g cooked equiv)","45g custom protein blend","14g pumpkin seeds","30g banana + 37g blueberries","240g unsweetened almond milk"],macros:"544 cal · 45g P · 58g C · 14g F"},
   { time:"12:00 PM",label:"MEAL 2 — CHICKEN & RICE",type:"meal",items:["6oz chicken breast (170g)","1 cup jasmine rice (158g)","1 cup mixed vegetables (160g)","½ avocado (75g)"],macros:"690 cal · 63g P · 56g C · 19g F"},
   { time:"5:30 PM",label:"MEAL 3 — STEAK & POTATO",type:"meal",items:["6oz sirloin steak (170g)","8oz white potato (227g)","1 cup mixed vegetables (160g)"],macros:"648 cal · 60g P · 54g C · 17g F"},
-  { time:"8:00 PM",label:"RETA INJECTION (Mon/Wed/Fri)",type:"supplement",items:["Retatrutide ~1.33mg SubQ — evening injection","4mg/week split across 3 doses"],note:"Skip on Tue/Thu/Sat/Sun"},
   { time:"SUNSET",label:"NIGHTSHADES ON",type:"supplement",items:["Chroma Nightshades ON"]},
-  { time:"10:00 PM",label:"BEFORE BED",type:"supplement",items:["Triacetyluridine 25mg","GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)"],note:"Lights out by 10:15 PM"},
+  { time:"9:00 PM",label:"EVENING INJECTIONS",type:"supplement",items:["GH 2 IU — SubQ daily","GHK-Cu 2mg — SubQ (Mon–Fri only)","Triacetyluridine 25mg"],note:"Lights out by 10:15 PM"},
 ];
 
 const WEEKLY = [
@@ -187,7 +183,7 @@ const DEFAULT_SUPPLY: SupplySeed[] = [
   {compoundId:"9mebc",name:"9-me-BC",category:"nootropic",color:"#6f8fcf",currentStock:0,stockUnit:"doses",weeklyUsage:0,vendors:[{name:"Nootropic Source",url:"https://nootropicsource.com",costPerOrder:25,unitsPerOrder:25}],notes:"20mg/dose. Reset phase only (4 weeks max)."},
   {compoundId:"semax",name:"Semax",category:"peptide",color:"#6fcf6f",currentStock:16,stockUnit:"doses",weeklyUsage:14,vendors:[{name:"Peptide Sciences",url:"https://peptidesciences.com",costPerOrder:40,unitsPerOrder:16}],notes:"300mcg/dose nasal. 5mg vial = ~16 doses."},
   {compoundId:"selank",name:"Selank",category:"peptide",color:"#6fcf6f",currentStock:20,stockUnit:"doses",weeklyUsage:14,vendors:[{name:"Peptide Sciences",url:"https://peptidesciences.com",costPerOrder:40,unitsPerOrder:20}],notes:"250mcg/dose nasal. 5mg vial = ~20 doses."},
-  {compoundId:"thiamine",name:"Thiamine HCL",category:"vitamin",color:"#cf8f6f",currentStock:100,stockUnit:"caps",weeklyUsage:7,vendors:[{name:"NOW Foods (Amazon)",url:"https://amazon.com",costPerOrder:15,unitsPerOrder:100}],notes:"500mg caps. Daily AM."},
+  {compoundId:"thiamine",name:"B1 (Thiamine HCL)",category:"vitamin",color:"#cf8f6f",currentStock:100,stockUnit:"caps",weeklyUsage:7,vendors:[{name:"NOW Foods (Amazon)",url:"https://amazon.com",costPerOrder:15,unitsPerOrder:100}],notes:"500mg caps. Daily AM."},
   {compoundId:"magglycinate",name:"Magnesium Glycinate",category:"mineral",color:"#8f8fcf",currentStock:120,stockUnit:"caps",weeklyUsage:7,vendors:[{name:"Doctor's Best",url:"https://amazon.com",costPerOrder:15,unitsPerOrder:120},{name:"Walmart",url:"https://walmart.com",costPerOrder:12,unitsPerOrder:120}],notes:"400mg caps. Daily AM."},
   {compoundId:"creatine",name:"Creatine Monohydrate",category:"amino",color:"#cfcf6f",currentStock:50,stockUnit:"servings",weeklyUsage:7,vendors:[{name:"Bulk Supplements",url:"https://bulksupplements.com",costPerOrder:25,unitsPerOrder:50}],notes:"10g/serving. Daily AM."},
   {compoundId:"cordyceps",name:"Cordyceps",category:"mushroom",color:"#6fcfcf",currentStock:30,stockUnit:"days",weeklyUsage:7,vendors:[{name:"Nootropics Depot",url:"https://nootropicsdepot.com",costPerOrder:30,unitsPerOrder:30}],notes:"2000mg/day. Cycle 8wks on / 2 off."},
@@ -269,7 +265,7 @@ const DEFAULT_COMPOUNDS: CompoundSeed[] = [
   {compoundId:"9mebc",name:"9-me-BC",category:"nootropic",tags:["nootropic","cognitive","cycle-required"]},
   {compoundId:"semax",name:"Semax",category:"peptide",tags:["peptide","focus","cognitive","daily-ok"]},
   {compoundId:"selank",name:"Selank",category:"peptide",tags:["peptide","sleep","recovery","daily-ok"]},
-  {compoundId:"thiamine",name:"Thiamine HCL",category:"vitamin",tags:["vitamin","daily-ok","metabolic"]},
+  {compoundId:"thiamine",name:"B1 (Thiamine HCL)",category:"vitamin",tags:["vitamin","daily-ok","metabolic"]},
   {compoundId:"magglycinate",name:"Magnesium Glycinate",category:"mineral",tags:["mineral","sleep","heart-health","daily-ok"]},
   {compoundId:"creatine",name:"Creatine Monohydrate",category:"amino",tags:["amino-acid","cognitive","daily-ok"]},
   {compoundId:"cordyceps",name:"Cordyceps",category:"mushroom",tags:["mushroom","metabolic","recovery","cycle-required"]},
@@ -363,6 +359,8 @@ function checksArrayToRecord(arr: Array<{itemKey:string;done:boolean}>): Record<
 }
 
 function runwayColor(w:number){if(w<2)return"#cf6f6f";if(w<4)return"#cfb86f";return"#6fcf6f";}
+
+function isRetaDay(dateStr:string):boolean{const day=new Date(dateStr+"T12:00:00").getDay();return day===1||day===3||day===5;}
 
 // Cycled substances config
 const CYCLED_SUBSTANCES:{name:string;daysOn:number;daysOff:number}[]=[
@@ -795,6 +793,12 @@ function ScheduleTab(){
 // TAB 2: LOG
 // ═══════════════════════════════════════════════════════════
 
+type BlockOverride = {
+  editedItems: Record<number, string>;
+  addedItems: string[];
+  removedIndexes: Set<number>;
+};
+
 function LogTab(){
   const[date,setDate]=useState(todayStr());
   const today=todayStr();
@@ -818,6 +822,26 @@ function LogTab(){
   const[localLift,setLocalLift]=useState(false);
   const[localRuck,setLocalRuck]=useState(false);
 
+  // Per-block local overrides (edit/add/remove items) — session only
+  const[blockOverrides,setBlockOverrides]=useState<Record<string,BlockOverride>>({});
+  // Inline editing state: which item is being edited (key = "blockLabel__origIdx" or "blockLabel__added__addedIdx")
+  const[editingItem,setEditingItem]=useState<string|null>(null);
+  const[editingItemText,setEditingItemText]=useState("");
+  // Add-item input open state per block
+  const[addingToBlock,setAddingToBlock]=useState<string|null>(null);
+  const[addItemText,setAddItemText]=useState("");
+  // Training type selector
+  const[trainingTypes,setTrainingTypes]=useState<Record<string,string>>({});
+
+  const getOverride=(label:string):BlockOverride=>blockOverrides[label]??{editedItems:{},addedItems:[],removedIndexes:new Set()};
+
+  const setOverride=(label:string,fn:(prev:BlockOverride)=>BlockOverride)=>{
+    setBlockOverrides(prev=>{
+      const cur=prev[label]??{editedItems:{},addedItems:[],removedIndexes:new Set()};
+      return{...prev,[label]:fn(cur)};
+    });
+  };
+
   useEffect(()=>{
     if(dailyLog){
       setLocalWeight(dailyLog.weight??undefined);
@@ -830,6 +854,9 @@ function LogTab(){
     }
   },[date,dailyLog?._id]);
 
+  // Reset overrides when date changes
+  useEffect(()=>{setBlockOverrides({});setTrainingTypes({});},[date]);
+
   const saveLog=(updates:Record<string,unknown>)=>{
     const current={weight:localWeight,feeling:localFeeling,notes:localNotes||undefined,liftDone:localLift,ruckDone:localRuck,...updates};
     upsertDailyLog({date,...current} as Parameters<typeof upsertDailyLog>[0]);
@@ -838,8 +865,30 @@ function LogTab(){
   const[logFilter,setLogFilter]=useState<string>("all");
   const blocks:Block[]=(dailyLog?.dailyRun as Block[])??[];
   const filteredLogBlocks=logFilter==="all"?blocks:blocks.filter(b=>b.type===logFilter);
-  const totalItems=blocks.reduce((a,b)=>a+b.items.length,0);
-  const doneItems=blocks.reduce((a,b)=>a+b.items.filter(item=>checks[`${b.label}__${item}`]).length,0);
+
+  // Compute effective items for a block (applying overrides)
+  const getEffectiveItems=(b:Block):{text:string;isAdded:boolean;origIdx:number|null}[]=>{
+    const ov=getOverride(b.label);
+    const result:{text:string;isAdded:boolean;origIdx:number|null}[]=[];
+    // Inject Retatrutide for EVENING INJECTIONS on M/W/F
+    const baseItems=b.label==="EVENING INJECTIONS"&&isRetaDay(date)
+      ?["Retatrutide ~1.33mg SubQ",...b.items]
+      :b.items;
+    baseItems.forEach((item,idx)=>{
+      if(ov.removedIndexes.has(idx))return;
+      const text=ov.editedItems[idx]??item;
+      result.push({text,isAdded:false,origIdx:idx});
+    });
+    ov.addedItems.forEach((item)=>{
+      result.push({text:item,isAdded:true,origIdx:null});
+    });
+    return result;
+  };
+
+  const totalItems=blocks.reduce((a,b)=>a+getEffectiveItems(b).length,0);
+  const doneItems=blocks.reduce((a,b)=>{
+    return a+getEffectiveItems(b).filter(({text})=>checks[`${b.label}__${text}`]).length;
+  },0);
   const pctDone=totalItems?Math.round((doneItems/totalItems)*100):0;
 
   const navDate=(dir:number)=>{const dt=new Date(date+"T12:00:00");dt.setDate(dt.getDate()+dir);const nd=dt.toISOString().split("T")[0];if(nd<=today)setDate(nd);};
@@ -851,6 +900,32 @@ function LogTab(){
   const heatmapDays=Array.from({length:30},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(29-i));return d.toISOString().split("T")[0];});
   const logMap:Record<string,typeof allLogs[number]>={};
   for(const l of allLogs)logMap[l.date]=l;
+
+  // Training type options
+  const liftOptions=["Lift (Barbell)","Lift (Dumbbell)","Machine Only","Bodyweight"];
+  const cardioOptions=["Ruck (Weighted)","Stairmaster","Treadmill","Bike","Row","Walk","Run"];
+
+  const commitItemEdit=(blockLabel:string,origIdx:number|null,addedIdx:number|null,newText:string)=>{
+    if(!newText.trim())return;
+    if(origIdx!==null){
+      setOverride(blockLabel,prev=>({...prev,editedItems:{...prev.editedItems,[origIdx]:newText.trim()}}));
+    } else if(addedIdx!==null){
+      setOverride(blockLabel,prev=>{
+        const newAdded=[...prev.addedItems];
+        newAdded[addedIdx]=newText.trim();
+        return{...prev,addedItems:newAdded};
+      });
+    }
+    setEditingItem(null);
+    setEditingItemText("");
+  };
+
+  const commitAddItem=(blockLabel:string)=>{
+    if(!addItemText.trim())return;
+    setOverride(blockLabel,prev=>({...prev,addedItems:[...prev.addedItems,addItemText.trim()]}));
+    setAddItemText("");
+    setAddingToBlock(null);
+  };
 
   return(
     <div style={{padding:"16px 16px 40px"}}>
@@ -899,7 +974,16 @@ function LogTab(){
       {filteredLogBlocks.map((b,i)=>{
         const bc:Record<string,string>={supplement:"#2d5a2d",meal:"#5a4d2d",training:"#2d2d5a",focus:"#5a2d5a"};
         const borderColor=bc[b.type]||"#333";
-        const blockDone=b.items.every(item=>checks[`${b.label}__${item}`]);
+        const effectiveItems=getEffectiveItems(b);
+        const blockDone=effectiveItems.length>0&&effectiveItems.every(({text})=>checks[`${b.label}__${text}`]);
+        const ov=getOverride(b.label);
+
+        // Training type options for this block
+        const isLiftBlock=b.label.toLowerCase().includes("lift");
+        const isCardioBlock=b.type==="training"&&!isLiftBlock;
+        const trainingOpts=isLiftBlock?liftOptions:cardioOptions;
+        const selectedType=trainingTypes[b.label]??"";
+
         return(
           <div key={i} style={{borderLeft:`3px solid ${blockDone?"#2a2a2a":borderColor}`,paddingLeft:16,marginBottom:20,opacity:blockDone?0.55:1,transition:"opacity 0.2s"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
@@ -907,30 +991,96 @@ function LogTab(){
               <TypeBadge type={b.type}/>
               {b.duration&&<span style={{fontSize:10,color:"#666",fontStyle:"italic"}}>{b.duration}</span>}
             </div>
-            <div style={{fontWeight:700,fontSize:14,color:blockDone?"#444":"#e0e0e0",marginBottom:6}}>{b.label}</div>
-            {b.items.map((item,ii)=>{
-              const key=`${b.label}__${item}`;const done=!!checks[key];
+            <div style={{fontWeight:700,fontSize:14,color:blockDone?"#444":"#e0e0e0",marginBottom:b.type==="training"?4:6}}>{b.label}</div>
+
+            {/* Training type selector */}
+            {b.type==="training"&&(
+              <div style={{marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <select value={selectedType} onChange={e=>setTrainingTypes(prev=>({...prev,[b.label]:e.target.value}))} style={{background:"#111",border:"1px solid #2d2d5a",borderRadius:6,color:selectedType?"#6f8fcf":"#444",fontSize:10,fontWeight:700,padding:"4px 8px",outline:"none",cursor:"pointer"}}>
+                  <option value="">— select type —</option>
+                  {trainingOpts.map(o=><option key={o} value={o}>{o}</option>)}
+                </select>
+                {selectedType&&<span style={{fontSize:10,fontWeight:700,color:"#6f8fcf",background:"#1a1a2f",border:"1px solid #2d2d5a",padding:"2px 8px",borderRadius:4}}>{selectedType}</span>}
+              </div>
+            )}
+
+            {/* Items */}
+            {effectiveItems.map(({text,isAdded,origIdx},ii)=>{
+              const itemKey=`${b.label}__${text}`;
+              const done=!!checks[itemKey];
+              const editKey=isAdded?`${b.label}__added__${ov.addedItems.indexOf(text)}`:`${b.label}__orig__${origIdx}`;
+              const isEditing=editingItem===editKey;
+
               return(
-                <button key={ii} onClick={()=>{
-                  const newDone=!done;
-                  toggleCheck({checkKey,itemKey:key,done:newDone});
-                  // Auto-decrement supply for supplement blocks
-                  if(b.type==="supplement"){
-                    const match=findMatchingSupply(item,supplyItems.map(s=>({compoundId:(s as {compoundId:string}).compoundId,name:s.name})));
-                    if(match){
-                      const delta=newDone?-1:1;
-                      adjustStock({compoundId:match.compoundId,delta});
-                      showToast(newDone?`📦 ${match.name} -1`:`📦 ${match.name} +1`);
+                <div key={ii} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0"}}>
+                  {/* Checkbox */}
+                  <button onClick={()=>{
+                    const newDone=!done;
+                    toggleCheck({checkKey,itemKey,done:newDone});
+                    if(b.type==="supplement"){
+                      const match=findMatchingSupply(text,supplyItems.map(s=>({compoundId:(s as {compoundId:string}).compoundId,name:s.name})));
+                      if(match){adjustStock({compoundId:match.compoundId,delta:newDone?-1:1});showToast(newDone?`📦 ${match.name} -1`:`📦 ${match.name} +1`);}
                     }
-                  }
-                }} style={{display:"flex",alignItems:"center",gap:10,background:"none",border:"none",cursor:"pointer",padding:"4px 0",textAlign:"left",width:"100%"}}>
-                  <div style={{width:16,height:16,borderRadius:"50%",flexShrink:0,border:`1.5px solid ${done?"#6fcf6f":"#2d2d2d"}`,background:done?"#6fcf6f":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-                    {done&&<span style={{fontSize:9,color:"#0d0d0d",fontWeight:900}}>✓</span>}
-                  </div>
-                  <span style={{fontSize:13,color:done?"#444":"#b0b0b0",lineHeight:1.4,textDecoration:done?"line-through":"none",transition:"all 0.15s"}}>{item}</span>
-                </button>
+                  }} style={{display:"flex",alignItems:"center",gap:8,background:"none",border:"none",cursor:"pointer",padding:0,flexShrink:0}}>
+                    <div style={{width:16,height:16,borderRadius:"50%",flexShrink:0,border:`1.5px solid ${done?"#6fcf6f":"#2d2d2d"}`,background:done?"#6fcf6f":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
+                      {done&&<span style={{fontSize:9,color:"#0d0d0d",fontWeight:900}}>✓</span>}
+                    </div>
+                  </button>
+
+                  {/* Item text or inline edit */}
+                  {isEditing?(
+                    <input
+                      autoFocus
+                      value={editingItemText}
+                      onChange={e=>setEditingItemText(e.target.value)}
+                      onBlur={()=>commitItemEdit(b.label,origIdx,isAdded?ov.addedItems.indexOf(text):null,editingItemText||text)}
+                      onKeyDown={e=>{if(e.key==="Enter")commitItemEdit(b.label,origIdx,isAdded?ov.addedItems.indexOf(text):null,editingItemText||text);if(e.key==="Escape"){setEditingItem(null);setEditingItemText("");}}}
+                      style={{flex:1,background:"#1a1a2a",border:"1px solid #3a3a5a",borderRadius:4,padding:"3px 7px",color:"#e0e0e0",fontSize:12,outline:"none",fontFamily:"inherit"}}
+                    />
+                  ):(
+                    <span style={{flex:1,fontSize:13,color:done?"#444":"#b0b0b0",lineHeight:1.4,textDecoration:done?"line-through":"none",transition:"all 0.15s"}}>{text}</span>
+                  )}
+
+                  {/* Edit icon */}
+                  {!isEditing&&(
+                    <button onClick={()=>{setEditingItem(editKey);setEditingItemText(text);}} style={{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:"#444",fontSize:11,flexShrink:0,lineHeight:1}} title="Edit dose/text">✏️</button>
+                  )}
+
+                  {/* Remove button */}
+                  <button onClick={()=>{
+                    if(isAdded){
+                      setOverride(b.label,prev=>{const newAdded=prev.addedItems.filter((_,ai)=>ai!==ov.addedItems.indexOf(text));return{...prev,addedItems:newAdded};});
+                    } else if(origIdx!==null){
+                      setOverride(b.label,prev=>{const newRemoved=new Set(prev.removedIndexes);newRemoved.add(origIdx);return{...prev,removedIndexes:newRemoved};});
+                    }
+                    // Uncheck if was checked
+                    if(done)toggleCheck({checkKey,itemKey,done:false});
+                  }} style={{background:"none",border:"none",cursor:"pointer",padding:"2px 4px",color:"#3a1a1a",fontSize:11,flexShrink:0,lineHeight:1}} title="Remove from today">✕</button>
+                </div>
               );
             })}
+
+            {/* Add item row */}
+            {addingToBlock===b.label?(
+              <div style={{display:"flex",gap:4,marginTop:6}}>
+                <input
+                  autoFocus
+                  value={addItemText}
+                  onChange={e=>setAddItemText(e.target.value)}
+                  onBlur={()=>{if(addItemText.trim())commitAddItem(b.label);else setAddingToBlock(null);}}
+                  onKeyDown={e=>{if(e.key==="Enter")commitAddItem(b.label);if(e.key==="Escape"){setAddingToBlock(null);setAddItemText("");}}}
+                  placeholder="e.g. sourdough bread, 8oz OJ..."
+                  style={{flex:1,background:"#111",border:"1px dashed #333",borderRadius:4,padding:"5px 8px",color:"#888",fontSize:11,outline:"none",fontFamily:"inherit"}}
+                />
+                <button onClick={()=>commitAddItem(b.label)} style={{padding:"5px 10px",background:"#1a2f1a",border:"1px solid #2d5a2d",borderRadius:4,color:"#6fcf6f",fontSize:11,cursor:"pointer",fontWeight:700}}>+</button>
+                <button onClick={()=>{setAddingToBlock(null);setAddItemText("");}} style={{padding:"5px 8px",background:"#1a1a1a",border:"1px solid #222",borderRadius:4,color:"#555",fontSize:11,cursor:"pointer"}}>✕</button>
+              </div>
+            ):(
+              <button onClick={()=>{setAddingToBlock(b.label);setAddItemText("");}} style={{marginTop:6,display:"flex",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"3px 0",color:"#333",fontSize:11}}>
+                <span style={{fontSize:13}}>+</span> <span>add item</span>
+              </button>
+            )}
+
             {b.macros&&<div style={{marginTop:6,fontSize:11,fontFamily:"monospace",color:"#cfb86f",background:"#1a1812",display:"inline-block",padding:"3px 10px",borderRadius:3}}>{b.macros}</div>}
             {b.note&&<div style={{marginTop:6,fontSize:11,color:"#cf6f6f",fontWeight:600}}>▸ {b.note}</div>}
           </div>
